@@ -17,6 +17,7 @@ import type { Card } from './armory';
 import { ART, Btn, C, F, Field, T } from './ui';
 import { TH, THEMES, ThemeName } from './theme';
 import { getJSON, LINKS, setJSON } from './store';
+import { APP_VERSION, checkUpdate, Update } from './update';
 
 type Tab = 'chat' | 'wiki' | 'news' | 'fish' | 'vent' | 'me';
 const TABS: Tab[] = ['chat', 'wiki', 'news', 'fish', 'vent', 'me'];
@@ -35,11 +36,18 @@ function Clock() {
   return <T style={st.clock}>{`${h % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`}</T>;
 }
 
-function StartMenu({ go, close }: { go: (t: Tab) => void; close: () => void }) {
+function StartMenu({ go, close, update, setUpdate }: { go: (t: Tab) => void; close: () => void; update: Update | null; setUpdate: (u: Update | null) => void }) {
   const [relay, setRelay] = useState('');
   const [about, setAbout] = useState(false);
   const [note, setNote] = useState('');
+  const [upNote, setUpNote] = useState('');
   useEffect(() => { getJSON('stink.relay', '').then(setRelay); }, []);
+  const checkNow = async () => {
+    setUpNote('Checking...');
+    const u = await checkUpdate();
+    if (u === 'error') setUpNote("Couldn't reach GitHub. Check your connection.");
+    else { setUpdate(u); setUpNote(u ? '' : `You have the newest version (${APP_VERSION}).`); }
+  };
   const item = (icon: any, label: string, sub: string, onPress: () => void, wide = false) => (
     <Pressable onPress={onPress} style={({ pressed }) => [st.smItem, pressed && { backgroundColor: TH.menuPressed }]}>
       {({ pressed }) => (
@@ -72,6 +80,17 @@ function StartMenu({ go, close }: { go: (t: Tab) => void; close: () => void }) {
             <T style={st.smText}>
               App version {Constants.expoConfig?.version}. Free and open source (GPL-3.0). Unofficial fan project, not affiliated with Square Enix.
             </T>
+            {Platform.OS !== 'web' ? (
+              <View style={{ marginTop: 10 }}>
+                {update ? (
+                  <Btn small primary label={`Download ${update.tag}`} onPress={() => Linking.openURL(update.url).catch(() => {})} />
+                ) : (
+                  <Btn small label="Check for updates" onPress={checkNow} />
+                )}
+                {upNote ? <T style={[st.smText, { color: TH.menuSub, marginTop: 4 }]}>{upNote}</T> : null}
+                {update ? <T style={[st.smText, { color: TH.menuSub, marginTop: 4 }]}>Version {update.tag} is out (you have {APP_VERSION}). It installs over this one and keeps your pairing.</T> : null}
+              </View>
+            ) : null}
             <T style={[st.smText, { color: TH.menuSub, marginTop: 10 }]}>Look</T>
             <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
               {(Object.keys(THEMES) as ThemeName[]).map((n) => (
@@ -102,7 +121,7 @@ function StartMenu({ go, close }: { go: (t: Tab) => void; close: () => void }) {
               {item(ART.b88.discord, 'Discord', '', () => Linking.openURL(LINKS.discord), true)}
               {item(ART.b88.site, 'Website', '', () => Linking.openURL(LINKS.website), true)}
               {item(ART.b88.github, 'GitHub', '', () => Linking.openURL(LINKS.github), true)}
-              {item(ART.hc.iron, 'Look & About', '', () => setAbout(true))}
+              {item(ART.hc.iron, update ? 'Update ready!' : 'Look & About', update ? update.tag : '', () => setAbout(true))}
             </View>
           </View>
         )}
@@ -120,6 +139,8 @@ export default function Desktop() {
   const [count, setCount] = useState<number | null>(null);
   const [cards, setCards] = useState<Card[] | null>(null);
   const [seen, setSeen] = useState<Record<string, boolean>>({ news: true });
+  const [update, setUpdate] = useState<Update | null>(null);
+  useEffect(() => { checkUpdate().then((u) => { if (u && u !== 'error') setUpdate(u); }); }, []);
   const insets = useSafeAreaInsets();
   const go = (t: Tab) => { setTab(t); setStart(false); setSeen((s) => (s[t] ? s : { ...s, [t]: true })); };
 
@@ -131,11 +152,13 @@ export default function Desktop() {
             <LinearGradient colors={(start ? TH.startOnGrad : TH.startGrad) as any} style={st.xpStart}>
               <Image source={ART.buddy.game} style={{ width: 20, height: 20 }} />
               <T style={st.xpStartText}>XIFO</T>
+              {update ? <View style={st.badge}><T style={st.badgeText}>1</T></View> : null}
             </LinearGradient>
           </Pressable>
         ) : (
           <Pressable onPress={() => setStart((v) => !v)} accessibilityLabel="Start" hitSlop={4}>
             <Image source={ART.orb} style={[st.orb, start && { opacity: 0.85 }]} />
+            {update ? <View style={[st.badge, { top: -8, right: 0 }]}><T style={st.badgeText}>1</T></View> : null}
           </Pressable>
         )}
         {TABS.map((t) => (
@@ -171,7 +194,7 @@ export default function Desktop() {
           </View>
         </SafeAreaView>
         {taskbar}
-        {start && <StartMenu go={go} close={() => setStart(false)} />}
+        {start && <StartMenu go={go} close={() => setStart(false)} update={update} setUpdate={setUpdate} />}
       </View>
     </ImageBackground>
   );
@@ -193,6 +216,9 @@ const st = StyleSheet.create({
     borderWidth: 1, borderColor: TH.name === 'online' ? '#000000' : '#1A3F99' },
   xpTabOn: { borderColor: TH.name === 'online' ? TH.accent : '#10286A' },
   xpTabText: { color: TH.tabText, fontFamily: F.semi, fontSize: 12, textShadowColor: '#0A2A6A', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 1 },
+  badge: { position: 'absolute', top: 3, right: 4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#E8302A',
+    borderWidth: 1, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeText: { color: '#FFFFFF', fontFamily: F.bold, fontSize: 10, lineHeight: 12 },
   trayDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 2 },
   clock: { color: '#FFF', fontSize: 12.5, fontFamily: F.reg },
   startMenu: { position: 'absolute', left: 4, bottom: 56, width: 330, maxWidth: '96%', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: TH.menuEdge, backgroundColor: TH.menuBg, elevation: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 10 },
