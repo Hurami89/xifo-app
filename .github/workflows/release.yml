@@ -108,6 +108,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # stable names too, so a link to releases/latest/download/<name> never goes stale
+          for f in files/XIFO-Setup-*.exe; do [ -e "$f" ] && cp "$f" files/XIFO-Setup.exe; done
+          for f in files/XIFO-*.AppImage; do [ -e "$f" ] && cp "$f" files/XIFO.AppImage; done
           ls -la files
           gh release create "$GITHUB_REF_NAME" files/* --repo "$GITHUB_REPOSITORY" --title "XIFO app $GITHUB_REF_NAME" --notes "**Android:** download XIFO.apk on your phone and open it (allow installing from your browser when asked); updates install over the old version.
           **Windows:** XIFO-Setup-*.exe.  **Linux / Steam Deck:** XIFO-*.AppImage (make it executable, then run it).

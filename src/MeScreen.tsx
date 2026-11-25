@@ -4,7 +4,7 @@ import { Alert, Image, Linking, Platform, Pressable, RefreshControl, ScrollView,
 import { ART, Btn, C, F, Field, Pane, Pic, Strip, T, Win } from './ui';
 import { faceOf } from './faces';
 import { Card, cachedMe, claim, ERA_JOBS, JOBS, jobLine, me, MODES, NATIONS, Pending, RACES, siteUrl } from './armory';
-import { setJSON } from './store';
+import { LINKS, setJSON } from './store';
 
 const SLOT_ORDER = [0, 1, 2, 3, 4, 9, 11, 12, 5, 6, 13, 14, 15, 10, 7, 8];
 const SLOT_NAME: Record<number, string> = { 0: 'Main', 1: 'Sub', 2: 'Range', 3: 'Ammo', 4: 'Head', 9: 'Neck', 11: 'Ear', 12: 'Ear',
@@ -37,8 +37,8 @@ export function PairBox({ onPaired }: { onPaired: () => void }) {
     <Win title="Pair with my launcher" icon={ART.buddy.phone}>
       <Pic source={ART.banners[4]} ratio={2.5} style={st.banner} />
       <T style={st.h}>See your characters and fish on the go</T>
-      <T style={st.p}>1. In the launcher: Characters page, <T style={st.b}>PAIR PHONE</T>.</T>
-      <T style={st.p}>2. Type the 6-letter code here (it works for 10 minutes).</T>
+      <T style={st.p}>1. In the launcher: Characters page, <T style={st.b}>PAIR APP</T>.</T>
+      <T style={st.p}>2. Type the 6-character code here (it works for 10 minutes).</T>
       <T style={st.p}>3. Press <T style={st.b}>SYNC NOW</T> in the launcher, so your characters are on xiforever.com.</T>
       <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
         <Field boxStyle={{ flex: 1 }} value={code} onChangeText={(t) => setCode(t.toUpperCase())} placeholder="ABC123"
@@ -108,7 +108,17 @@ export default function MeScreen({ onCards }: { onCards?: (cards: Card[]) => voi
   );
 }
 
-function Profile({ c, pending }: { c: Card; pending: Pending[] }) {
+/** An item's 32x32 icon, from the hub (xiforever.com/armory/icon/<id>.png, cached there). Nothing if it has none. */
+function ItemIcon({ id, base, size = 32 }: { id?: number; base: string; size?: number }) {
+  const [bad, setBad] = useState(false);
+  if (!id || bad) return <View style={[st.icon, { width: size, height: size }, st.iconEmpty]} />;
+  return <Image source={{ uri: `${base}/armory/icon/${id}.png` }} onError={() => setBad(true)}
+    style={[st.icon, { width: size, height: size }]} resizeMode="contain" />;
+}
+
+export function Profile({ c, pending }: { c: Card; pending: Pending[] }) {
+  const [base, setBase] = useState(LINKS.website);
+  useEffect(() => { siteUrl().then(setBase).catch(() => {}); }, []);
   const [race, sex] = RACES[c.race] || ['Hume', 'Male'];
   const equip = new Map(c.equip.map((e) => [e.slot, e]));
   const open = async () => Linking.openURL((await siteUrl()) + c._link).catch(() => {});
@@ -141,8 +151,13 @@ function Profile({ c, pending }: { c: Card; pending: Pending[] }) {
               const e = equip.get(s);
               return (
                 <View key={i} style={st.slot}>
-                  <T style={st.slotName}>{SLOT_NAME[s]}</T>
-                  <T style={[st.slotItem, !e && { color: C.dim, opacity: 0.6 }]} numberOfLines={2}>{e ? e.name : '-'}</T>
+                  <View style={st.slotIn}>
+                    <ItemIcon id={e?.id} base={base} />
+                    <View style={{ flex: 1 }}>
+                      <T style={st.slotName}>{SLOT_NAME[s]}</T>
+                      <T style={[st.slotItem, !e && { color: C.dim, opacity: 0.6 }]} numberOfLines={2}>{e ? e.name : '-'}</T>
+                    </View>
+                  </View>
                 </View>
               );
             })}
@@ -187,7 +202,7 @@ function Profile({ c, pending }: { c: Card; pending: Pending[] }) {
                 <Image source={faceOf(m.race, m.face)} style={st.mateFace} />
                 <T style={st.mateName}>{m.name}</T>
                 <T style={st.mateJob}>{JOBS[m.mjob - 1]}{m.level}{m.sjob ? `/${JOBS[m.sjob - 1]}` : ''}</T>
-                {m.equip.slice(0, 4).map((e) => <T key={e.slot} style={st.mateGear} numberOfLines={1}>{e.name}</T>)}
+                <View style={st.mateIcons}>{m.equip.slice(0, 8).map((e) => <ItemIcon key={e.slot} id={e.id} base={base} size={24} />)}</View>
               </View>
             ))}
           </ScrollView>
@@ -226,7 +241,11 @@ const st = StyleSheet.create({
   tagHc: { backgroundColor: C.hcBg, borderColor: C.hcEdge, color: C.hardcore, fontFamily: F.bold },
   tagGil: { backgroundColor: C.gilBg, borderColor: C.gilEdge, color: C.gilText, fontFamily: F.semi },
   equip: { flexDirection: 'row', flexWrap: 'wrap', padding: 4 },
-  slot: { width: '25%', padding: 3 },
+  slot: { width: '50%', padding: 3 },
+  slotIn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.boxBg, borderWidth: 1, borderColor: C.line, borderRadius: 4, padding: 4 },
+  icon: { borderRadius: 3 },
+  iconEmpty: { backgroundColor: C.line, opacity: 0.35 },
+  mateIcons: { flexDirection: 'row', flexWrap: 'wrap', gap: 2, justifyContent: 'center', marginTop: 4 },
   slotName: { fontSize: 9.5, color: C.dim, letterSpacing: 0.5 },
   slotItem: { fontSize: 11.5, lineHeight: 14, minHeight: 28 },
   vis: { fontSize: 12, color: C.dim, alignSelf: 'center', flex: 1 },
