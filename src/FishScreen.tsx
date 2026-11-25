@@ -12,6 +12,7 @@ import { getJSON, setJSON } from './store';
 import * as E from './fishing/engine';
 import Scene, { Phase, SCENE_RATIO } from './fishing/Scene';
 import { TH } from './theme';
+import { sfx, useMusic, useSound, setFx, setMusic } from './sfx';
 
 const RANKS = ['Amateur', 'Recruit', 'Initiate', 'Novice', 'Apprentice', 'Journeyman', 'Craftsman', 'Artisan', 'Adept', 'Veteran', 'Expert'];
 
@@ -33,7 +34,9 @@ type Line = { id: number; text: string; kind?: 'good' | 'bad' | 'skill' | 'info'
 type Fight = { fish: E.Fish; critical: boolean; p: ReturnType<typeof E.fightParams>; stamina: number; left: number;
   arrow: null | { dir: 'L' | 'R'; until: number; gold: boolean }; next: number; result?: string };
 
-export default function FishScreen({ cardsHint, goMe }: { cardsHint: Card[] | null; goMe: () => void }) {
+export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHint: Card[] | null; goMe: () => void; active?: boolean }) {
+  useMusic('fishing', active);   // (2026-11-25) the fishing music while this tab shows
+  const sound = useSound();
   const [cards, setCards] = useState<Card[] | null>(cardsHint);
   const [pending, setPending] = useState<Pending[]>([]);
   const [unpaired, setUnpaired] = useState(false);
@@ -165,17 +168,20 @@ export default function FishScreen({ cardsHint, goMe }: { cardsHint: Card[] | nu
     setPhase('cast');
     setTimeout(() => setPhase((ph) => (ph === 'cast' ? 'wait' : ph)), 800);
     say(`You cast your line (${baitSel.bait.name}).`);
+    sfx('cast');
     const wait = E.rand(2.5, 7.5) * 1000;
     setTimeout(() => {
       const { fish, critical } = E.rollHook(spot, baitSel.bait, Math.floor(skill / 10), rod);
       if (!fish) {
         say("You didn't catch anything.", 'bad');
+        sfx('lost', 0.5);
         setPhase('lost');
         setTimeout(() => { setPhase('idle'); setBusy(null); }, 900);
         return;
       }
       useBait();
       Vibration.vibrate(critical ? [0, 60, 60, 60] : 80);
+      sfx(critical ? 'gold' : 'bite');
       say(critical ? 'Your keen senses tell you: this one is hooked fast!' : fish.item ? 'Something heavy and lifeless pulls at your line...'
         : fish.large ? 'Something clamps onto your line ferociously!' : 'Something caught the hook!', critical ? 'good' : undefined);
       const p = E.fightParams(fish, rod, Math.floor(skill / 10), critical);
@@ -211,6 +217,7 @@ export default function FishScreen({ cardsHint, goMe }: { cardsHint: Card[] | nu
       if (arrow && now > arrow.until) { stamina = Math.min(100, stamina + f.p.heal); arrow = null; }
       if (!arrow && now >= next) {
         arrow = { dir: Math.random() < 0.5 ? 'L' : 'R', until: now + f.p.window * 1000, gold: f.critical };
+        if (f.critical) sfx('gold', 0.4);
         next = now + f.p.every * 1000 + f.p.window * 500;
       }
       stamina = Math.min(100, stamina + f.p.pull * dt);
@@ -226,8 +233,8 @@ export default function FishScreen({ cardsHint, goMe }: { cardsHint: Card[] | nu
     const f = fightRef.current;
     if (!f || f.result) return;
     let stamina = f.stamina;
-    if (f.arrow && f.arrow.dir === dir) { stamina -= f.p.hit; setHitTick((n) => n + 1); }
-    else { stamina = Math.min(100, stamina + f.p.heal * 0.6); setMissTick((n) => n + 1); }
+    if (f.arrow && f.arrow.dir === dir) { stamina -= f.p.hit; setHitTick((n) => n + 1); sfx('hit', 0.6); sfx('reel', 0.4); }
+    else { stamina = Math.min(100, stamina + f.p.heal * 0.6); setMissTick((n) => n + 1); sfx('miss', 0.6); }
     const nf = { ...f, stamina, arrow: null };
     if (stamina <= 0) return end(nf, true);
     fightRef.current = nf;
@@ -238,12 +245,13 @@ export default function FishScreen({ cardsHint, goMe }: { cardsHint: Card[] | nu
     fightRef.current = { ...f, result: 'done' };
     setFight(null);
     const finish = (ms: number) => setTimeout(() => { fightRef.current = null; setPhase('idle'); setBusy(null); setLandedFish(null); }, ms);
-    if (!won) { say(f.fish.item ? 'Whatever it was sank back into the water.' : 'You lost your catch.', 'bad'); setPhase('lost'); finish(900); return; }
+    if (!won) { say(f.fish.item ? 'Whatever it was sank back into the water.' : 'You lost your catch.', 'bad'); sfx('lost'); setPhase('lost'); finish(900); return; }
     const [lose, why] = E.loseChance(f.fish, Math.floor(skill / 10), rod!);
-    if (Math.random() * 100 < lose) { say(`You lost your catch: ${why}.`, 'bad'); setPhase('lost'); finish(900); return; }
+    if (Math.random() * 100 < lose) { say(`You lost your catch: ${why}.`, 'bad'); sfx('lost'); setPhase('lost'); finish(900); return; }
     const size = landed(f.fish);
     setLandedFish({ id: f.fish.id, name: f.fish.id === E.GIL_ITEM ? 'Gil!' : f.fish.name, size, item: f.fish.item, large: f.fish.large });
     setPhase('caught');
+    sfx('catch');
     finish(2200);
   };
 
@@ -265,6 +273,7 @@ export default function FishScreen({ cardsHint, goMe }: { cardsHint: Card[] | nu
     const gain = Math.min(E.skillUp(fish.skill, skill, rank, !!zone?.city, card?.fishing.rate ?? 1), cap - skill);
     if (gain > 0) {
       const now = skill + gain;
+      setTimeout(() => sfx('skill'), 900);
       say(`Your fishing skill rises ${(gain / 10).toFixed(1)} points.${Math.floor(now / 10) > Math.floor(skill / 10) ? ` Fishing skill reaches level ${Math.floor(now / 10)}!` : ''}`, 'skill');
       update((d) => { d.unsent.skill += gain; d.skillHigh = Math.max(d.skillHigh, now); });
     } else if (skill >= cap && fish.skill > Math.floor(skill / 10)) {
@@ -306,6 +315,10 @@ export default function FishScreen({ cardsHint, goMe }: { cardsHint: Card[] | nu
         <Stat label="Caught" value={String(save.total)} sub={sending ? '' : undefined} />
       </View>
       {sending ? <T style={st.sending}>{sending}</T> : null}
+      <View style={{ flexDirection: 'row', gap: 5, marginTop: 4 }}>
+        <Btn small label={sound.fx ? 'Sounds: On' : 'Sounds: Off'} onPress={() => setFx(!sound.fx)} />
+        <Btn small label={sound.music ? 'Music: On' : 'Music: Off'} onPress={() => setMusic(!sound.music)} />
+      </View>
     </View>
   );
 

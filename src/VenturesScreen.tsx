@@ -9,6 +9,7 @@ import { ART, Btn, F, Pane, Strip, T, Win } from './ui';
 import { PairBox } from './MeScreen';
 import { siteUrl } from './armory';
 import { TH } from './theme';
+import { sfx, useMusic, useSound, setFx, setMusic } from './sfx';
 import { Camp, cachedCamps, cachedState, fetchState, markSeen, newVentureId, recall, RosterChar, start, State, Venture } from './ventures/api';
 import Stage, { stateAt } from './ventures/Stage';
 
@@ -25,7 +26,9 @@ const confirm = (title: string, text: string, yes: () => void) => {
   Alert.alert(title, text, [{ text: 'No', style: 'cancel' }, { text: 'Yes', onPress: yes }]);
 };
 
-export default function VenturesScreen() {
+export default function VenturesScreen({ active = true }: { active?: boolean }) {
+  useMusic('ventures', active);   // (2026-11-25) the Ventures music while this tab shows
+  const sound = useSound();
   const [state, setState] = useState<State | null>(null);
   const [camps, setCamps] = useState<Record<string, Camp>>({});
   const [unpaired, setUnpaired] = useState(false);
@@ -91,7 +94,8 @@ export default function VenturesScreen() {
     setBusy(true);
     const res = await start({ id: newVentureId(), char: char.name, slots: chosen.map((m) => m.slot), camp: campId, hours });
     setBusy(false);
-    if (res.error) { setNote(res.error); return; }
+    if (res.error) { setNote(res.error); sfx('miss', 0.5); return; }
+    sfx('depart');
     setPicked([]);
     load();
   };
@@ -100,7 +104,12 @@ export default function VenturesScreen() {
     if (res.error) setNote(res.error);
     load();
   });
-  const open = (v: Venture) => { setReport(v); if (!v.seen) { markSeen(v.id); v.seen = true; } };
+  const open = (v: Venture) => {
+    if (!v.seen) sfx(v.results?.levels?.some((lv, i) => lv > (v.mates[i]?.level ?? lv)) ? 'levelup' : 'home');
+    else sfx('select', 0.5);
+    setReport(v);
+    if (!v.seen) { markSeen(v.id); v.seen = true; }
+  };
 
   if (unpaired) return <ScrollView contentContainerStyle={st.wrap}><PairBox onPaired={load} /></ScrollView>;
   if (report) return <Report v={report} camps={camps} close={() => setReport(null)} />;
@@ -111,6 +120,10 @@ export default function VenturesScreen() {
         <T style={st.p}>Send squad mates out to level at the real exp camps of the era while you do something else.
           They earn <T style={st.b}>{n(state?.expPerHour || 3000)} exp an hour</T>, plus whatever the camp drops. It all
           arrives in your game: exp and gil when you're logged in, items in your delivery box.</T>
+        <View style={{ flexDirection: 'row', gap: 5, marginTop: 6 }}>
+          <Btn small label={sound.fx ? 'Sounds: On' : 'Sounds: Off'} onPress={() => setFx(!sound.fx)} />
+          <Btn small label={sound.music ? 'Music: On' : 'Music: Off'} onPress={() => setMusic(!sound.music)} />
+        </View>
         {note ? <T style={st.err}>{note}</T> : null}
         {!roster.length ? (
           <T style={[st.p, { marginTop: 6 }]}>No squads yet. Press PLAY once in the launcher (with this app paired) and your squad
@@ -185,7 +198,7 @@ export default function VenturesScreen() {
               <Strip title={low < (state?.partyFrom || 10) ? 'Where (solo hunting below level 10)' : 'Which camp'} />
               <Pane style={{ marginBottom: 8 }}>
                 {fits.map((c) => (
-                  <Pressable key={c.id} onPress={() => setCampId(c.id)} style={[st.camp, campId === c.id && { backgroundColor: TH.rowPressed }]}>
+                  <Pressable key={c.id} onPress={() => { setCampId(c.id); sfx('select', 0.5); }} style={[st.camp, campId === c.id && { backgroundColor: TH.rowPressed }]}>
                     <T style={st.check}>{campId === c.id ? '◉' : '○'}</T>
                     <View style={{ flex: 1 }}>
                       <T style={st.b}>{c.title} <T style={st.small}>({c.spot}, Lv {c.lo}-{c.hi})</T></T>

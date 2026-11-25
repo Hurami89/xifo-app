@@ -188,8 +188,8 @@ export default function Desktop() {
             <View style={[st.screen, tab !== 'chat' && st.hidden]}><ChatScreen onCount={setCount} /></View>
             <View style={[st.screen, tab !== 'wiki' && st.hidden]}><WikiScreen /></View>
             <View style={[st.screen, tab !== 'news' && st.hidden]}><NewsScreen goChat={() => go('chat')} goWiki={() => go('wiki')} /></View>
-            {seen.fish && <View style={[st.screen, tab !== 'fish' && st.hidden]}><FishScreen cardsHint={cards} goMe={() => go('me')} /></View>}
-            {seen.vent && <View style={[st.screen, tab !== 'vent' && st.hidden]}><VenturesScreen /></View>}
+            {seen.fish && <View style={[st.screen, tab !== 'fish' && st.hidden]}><FishScreen cardsHint={cards} goMe={() => go('me')} active={tab === 'fish'} /></View>}
+            {seen.vent && <View style={[st.screen, tab !== 'vent' && st.hidden]}><VenturesScreen active={tab === 'vent'} /></View>}
             {seen.me && <View style={[st.screen, tab !== 'me' && st.hidden]}><MeScreen onCards={setCards} /></View>}
           </View>
         </SafeAreaView>

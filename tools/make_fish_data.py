@@ -119,7 +119,10 @@ def main():
     for r in rows('fishing_rod'):
         rodid, name, material, size, flags, min_rank, max_rank, attack, lgd_attack, recovery, ftime = r[:11]
         legendary, rating = r[20], r[21]
-        if legendary or name in ('Goldfish Basket', 'Maze Monger Fishing Rod'):
+        # (2026-11-25, Hasuko: the app only showed the first rod) the rods that can also land legendary fish (Lu Shang's,
+        # Ebisu, Judges) were left out, so a character holding one only saw its other rod. They fish normally here
+        # (the legendary fish themselves stay out).
+        if name in ('Goldfish Basket', 'Maze Monger Fishing Rod'):
             continue
         rods[rodid] = {'id': rodid, 'name': name, 'large': size == 1, 'attack': attack, 'recovery': recovery,
                        'time': ftime, 'rating': rating, 'minRank': min_rank, 'maxRank': max_rank}
