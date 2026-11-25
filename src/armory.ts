@@ -39,7 +39,7 @@ async function phoneKey(): Promise<string> {
   return key;
 }
 
-async function call(path: string, body?: unknown): Promise<any> {
+export async function call(path: string, body?: unknown): Promise<any> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 20000);
   try {

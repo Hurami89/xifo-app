@@ -6,7 +6,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { applyTheme } from './src/theme';
+import { applyTheme, DEFAULT_THEME } from './src/theme';
 import { getJSON } from './src/store';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -31,7 +31,7 @@ export default function App() {
   const [Desktop, setDesktop] = useState<React.ComponentType | null>(null);
   useEffect(() => {
     (async () => {
-      applyTheme(await getJSON<string>('app.theme', 'vanadiel'));
+      applyTheme(await getJSON<string>('app.theme', DEFAULT_THEME));
       setDesktop(() => require('./src/Desktop').default);
     })();
   }, []);

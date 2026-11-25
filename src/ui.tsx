@@ -45,6 +45,7 @@ export const ART = {
     wiki: [require('../assets/art/tab_wiki.png'), require('../assets/art/tab_wiki_on.png')],
     news: [require('../assets/art/tab_news.png'), require('../assets/art/tab_news_on.png')],
     fish: [require('../assets/art/tab_fish.png'), require('../assets/art/tab_fish_on.png')],
+    vent: [require('../assets/art/tab_vent.png'), require('../assets/art/tab_vent_on.png')],
     me: [require('../assets/art/tab_me.png'), require('../assets/art/tab_me_on.png')],
   } as Record<string, ImageSourcePropType[]>,
 };

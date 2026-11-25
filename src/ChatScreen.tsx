@@ -188,7 +188,7 @@ export default function ChatScreen({ onCount }: { onCount?: (n: number | null) =
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
       <View style={st.wrap}>
-        <Win title={TH.chatMode === 'ffxi' ? 'Stinkshell - Linkshell' : 'Main Room - Stinkshell'} icon={ART.buddy.game} style={{ flex: 1, alignSelf: 'stretch' }} onClose={signOff}>
+        <Win title={TH.chatMode === 'ffxi' ? 'Stinkshell - Linkshell' : TH.chatMode === 'online' ? 'Stinkshell Chat Room: Vana\'diel Lobby' : 'Main Room - Stinkshell'} icon={ART.buddy.game} style={{ flex: 1, alignSelf: 'stretch' }} onClose={signOff}>
           <View style={st.meRow}>
             <Image source={buddyOf(screen)} style={{ width: 30, height: 30 }} />
             <View style={{ flex: 1 }}>
@@ -265,6 +265,15 @@ const ChatLine = React.memo(function ChatLine({ line, prev, me, clean, onName }:
       </Text>
     );
   }
+  if (line.kind === 'say' && TH.chatMode === 'online') {
+    // the 2003 online-service chat room: ScreenName: text, your own name red, everyone else's blue
+    return (
+      <Text style={st.olLine}>
+        <Text style={[st.olName, { color: line.screen === me ? C.me : C.other }]} onLongPress={() => onName(line.screen)}>{line.screen}: </Text>
+        <Rich text={body} style={st.olText} />
+      </Text>
+    );
+  }
   if (line.kind === 'say') {
     const sameAsBefore = prev && prev.kind === 'say' && prev.screen === line.screen && line.t - prev.t < 120;
     return (
@@ -320,6 +329,9 @@ const st = StyleSheet.create({
   sys: { color: C.system, fontStyle: 'italic', fontSize: 13, marginTop: 5 },
   hcRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, padding: 6, backgroundColor: C.hcBg, borderRadius: 4, borderWidth: 1, borderColor: C.hcEdge },
   lsLine: { marginTop: 3, fontSize: 15, lineHeight: 21 },
+  olLine: { marginTop: 3, fontFamily: F.reg, fontSize: 14.5, lineHeight: 20 },
+  olName: { fontFamily: F.bold },
+  olText: { color: C.chatSay, fontFamily: F.reg, fontSize: 14.5 },
   lsName: { color: C.chatSay, fontFamily: F.semi },
   lsText: { color: C.chatSay, fontFamily: F.reg, fontSize: 15, lineHeight: 21 },
   hc: { flex: 1, color: C.hardcore, fontFamily: F.semi, fontSize: 14 },

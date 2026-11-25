@@ -96,6 +96,7 @@ TABS = {
     'tab_news': ('NEWS', ['apu'], 'leaf'),
     'tab_fish': ('FISH', ['mini-mithra'], 'aqua'),
     'tab_me': ('ME', ['hume-f'], 'sky'),
+    'tab_vent': ('VENTURE', ['apu-red'], 'leaf'),
 }
 
 
@@ -219,6 +220,12 @@ def small_icons():
     d.ellipse([cx - N * 0.13, cy - N * 0.3, cx + N * 0.13, cy - N * 0.04], fill=(255, 255, 255, 255))
     d.chord([cx - N * 0.27, cy + N * 0.0, cx + N * 0.27, cy + N * 0.5], 180, 360, fill=(255, 255, 255, 255))
     finish_disc(img, S, 'icon_me.png')
+    img, S = glossy_disc(64, (170, 240, 150), (40, 140, 60), (20, 80, 30))       # Ventures: a sword and a pennant
+    d = ImageDraw.Draw(img)
+    d.line([(cx - N * 0.22, cy + N * 0.26), (cx + N * 0.2, cy - N * 0.28)], fill=(255, 255, 255, 255), width=S * 5)
+    d.line([(cx - N * 0.27, cy + N * 0.12), (cx - N * 0.08, cy + N * 0.3)], fill=(255, 255, 255, 255), width=S * 5)
+    d.polygon([(cx + N * 0.02, cy - N * 0.3), (cx + N * 0.3, cy - N * 0.2), (cx + N * 0.02, cy - N * 0.1)], fill=(255, 230, 120, 255))
+    finish_disc(img, S, 'icon_vent.png')
 
 
 def fish_sprites():

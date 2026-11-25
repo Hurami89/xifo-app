@@ -1,4 +1,4 @@
-// The desktop: wallpaper, the programs (Stinkshell chat, the wiki, news, portable fishing, your characters) and a
+// The desktop: wallpaper, the programs (Stinkshell chat, the wiki, news, portable fishing, ventures, your characters) and a
 // taskbar: XP's own (Vana'diel look) or Aero glass with the art-pack buttons. Every program stays open while you
 // switch, so the chat room keeps running. On a computer (the website, the PC / Linux app) it sits in a phone-wide column.
 import React, { useEffect, useState } from 'react';
@@ -12,17 +12,18 @@ import WikiScreen from './WikiScreen';
 import NewsScreen from './NewsScreen';
 import MeScreen from './MeScreen';
 import FishScreen from './FishScreen';
+import VenturesScreen from './VenturesScreen';
 import type { Card } from './armory';
 import { ART, Btn, C, F, Field, T } from './ui';
 import { TH, THEMES, ThemeName } from './theme';
 import { getJSON, LINKS, setJSON } from './store';
 
-type Tab = 'chat' | 'wiki' | 'news' | 'fish' | 'me';
-const TABS: Tab[] = ['chat', 'wiki', 'news', 'fish', 'me'];
-const LABEL: Record<Tab, string> = { chat: 'Chat', wiki: 'Wiki', news: 'News', fish: 'Fish', me: 'Me' };
+type Tab = 'chat' | 'wiki' | 'news' | 'fish' | 'vent' | 'me';
+const TABS: Tab[] = ['chat', 'wiki', 'news', 'fish', 'vent', 'me'];
+const LABEL: Record<Tab, string> = { chat: 'Chat', wiki: 'Wiki', news: 'News', fish: 'Fish', vent: 'Venture', me: 'Me' };
 const ICON: Record<Tab, any> = {
   chat: ART.buddy.phone, wiki: ART.buddy.web, news: ART.buddy.game,
-  fish: require('../assets/art/icon_fish.png'), me: require('../assets/art/icon_me.png'),
+  fish: require('../assets/art/icon_fish.png'), vent: require('../assets/art/icon_vent.png'), me: require('../assets/art/icon_me.png'),
 };
 const XP = TH.tabMode === 'xp';
 const WIDE = Platform.OS === 'web';
@@ -40,7 +41,7 @@ function StartMenu({ go, close }: { go: (t: Tab) => void; close: () => void }) {
   const [note, setNote] = useState('');
   useEffect(() => { getJSON('stink.relay', '').then(setRelay); }, []);
   const item = (icon: any, label: string, sub: string, onPress: () => void, wide = false) => (
-    <Pressable onPress={onPress} style={({ pressed }) => [st.smItem, pressed && { backgroundColor: '#316AC5' }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [st.smItem, pressed && { backgroundColor: TH.menuPressed }]}>
       {({ pressed }) => (
         <>
           <Image source={icon} style={wide ? { width: 52, height: 18 } : { width: 30, height: 30 }} resizeMode="contain" />
@@ -60,18 +61,18 @@ function StartMenu({ go, close }: { go: (t: Tab) => void; close: () => void }) {
   return (
     <Pressable style={StyleSheet.absoluteFill} onPress={close}>
       <Pressable style={st.startMenu} onPress={() => {}}>
-        <LinearGradient colors={['#1C5FD1', '#3F8CF3', '#1D63D6']} style={st.smHead}>
+        <LinearGradient colors={TH.menuHead as any} style={st.smHead}>
           <Image source={ART.buddy.game} style={{ width: 38, height: 38 }} />
           <T style={[st.smHeadText, { flex: 1 }]}>XI: Forever Offline</T>
           <Clock />
         </LinearGradient>
         {about ? (
-          <View style={{ padding: 12, backgroundColor: '#FFF' }}>
+          <View style={{ padding: 12, backgroundColor: TH.menuBg }}>
             <Image source={ART.logo} style={{ width: '80%', alignSelf: 'center', aspectRatio: 442 / 186 }} resizeMode="contain" />
             <T style={st.smText}>
               App version {Constants.expoConfig?.version}. Free and open source (GPL-3.0). Unofficial fan project, not affiliated with Square Enix.
             </T>
-            <T style={[st.smText, { color: '#4A6B84', marginTop: 10 }]}>Look</T>
+            <T style={[st.smText, { color: TH.menuSub, marginTop: 10 }]}>Look</T>
             <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
               {(Object.keys(THEMES) as ThemeName[]).map((n) => (
                 <Pressable key={n} onPress={() => pickLook(n)} style={[st.look, n === TH.name && st.lookOn]}>
@@ -80,7 +81,7 @@ function StartMenu({ go, close }: { go: (t: Tab) => void; close: () => void }) {
               ))}
             </View>
             {note ? <T style={[st.smText, { color: '#6B4E00', marginTop: 6 }]}>{note}</T> : null}
-            <T style={[st.smText, { color: '#4A6B84', marginTop: 10 }]}>Chat room address (for testing; leave empty for the real one)</T>
+            <T style={[st.smText, { color: TH.menuSub, marginTop: 10 }]}>Chat room address (for testing; leave empty for the real one)</T>
             <Field value={relay} onChangeText={setRelay} placeholder={LINKS.relay} autoCapitalize="none" keyboardType="url" />
             <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
               <Btn small label="Save" onPress={() => { setJSON('stink.relay', relay.trim()); setAbout(false); }} />
@@ -94,6 +95,7 @@ function StartMenu({ go, close }: { go: (t: Tab) => void; close: () => void }) {
               {item(ART.buddy.web, "Vana'diel Explorer", 'The wiki', () => go('wiki'))}
               {item(ART.buddy.game, 'XIFO News', "What's new", () => go('news'))}
               {item(ICON.fish, 'Portable Fishing', 'Fish on the go', () => go('fish'))}
+              {item(ICON.vent, 'Ventures', 'Send your squad out', () => go('vent'))}
               {item(ICON.me, 'My Characters', 'Your profile', () => go('me'))}
             </View>
             <View style={st.smRight}>
@@ -104,7 +106,7 @@ function StartMenu({ go, close }: { go: (t: Tab) => void; close: () => void }) {
             </View>
           </View>
         )}
-        <LinearGradient colors={['#3F8CF3', '#1D63D6']} style={st.smFoot}>
+        <LinearGradient colors={TH.menuFoot as any} style={st.smFoot}>
           <Btn small label="Close" onPress={close} />
         </LinearGradient>
       </Pressable>
@@ -126,7 +128,7 @@ export default function Desktop() {
       <View style={st.taskRow}>
         {XP ? (
           <Pressable onPress={() => setStart((v) => !v)} accessibilityLabel="Start">
-            <LinearGradient colors={start ? ['#2F7A22', '#3A9A2E'] : ['#5CC24E', '#3C9E30', '#2F8A24']} style={st.xpStart}>
+            <LinearGradient colors={(start ? TH.startOnGrad : TH.startGrad) as any} style={st.xpStart}>
               <Image source={ART.buddy.game} style={{ width: 20, height: 20 }} />
               <T style={st.xpStartText}>XIFO</T>
             </LinearGradient>
@@ -141,7 +143,7 @@ export default function Desktop() {
             {XP ? (
               <LinearGradient colors={(tab === t ? TH.tabOnGrad : TH.tabGrad) as any} style={[st.xpTab, tab === t && st.xpTabOn]}>
                 <Image source={ICON[t]} style={{ width: 14, height: 14 }} />
-                <T style={st.xpTabText} numberOfLines={1}>{LABEL[t]}</T>
+                <T style={[st.xpTabText, LABEL[t].length > 5 && { fontSize: 10.5 }]} numberOfLines={1}>{LABEL[t]}</T>
               </LinearGradient>
             ) : (
               <Image source={ART.tabs[t][tab === t ? 1 : 0]} style={[st.tab, tab === t && st.tabOn]} resizeMode="contain" />
@@ -164,6 +166,7 @@ export default function Desktop() {
             <View style={[st.screen, tab !== 'wiki' && st.hidden]}><WikiScreen /></View>
             <View style={[st.screen, tab !== 'news' && st.hidden]}><NewsScreen goChat={() => go('chat')} goWiki={() => go('wiki')} /></View>
             {seen.fish && <View style={[st.screen, tab !== 'fish' && st.hidden]}><FishScreen cardsHint={cards} goMe={() => go('me')} /></View>}
+            {seen.vent && <View style={[st.screen, tab !== 'vent' && st.hidden]}><VenturesScreen /></View>}
             {seen.me && <View style={[st.screen, tab !== 'me' && st.hidden]}><MeScreen onCards={setCards} /></View>}
           </View>
         </SafeAreaView>
@@ -184,25 +187,25 @@ const st = StyleSheet.create({
   tab: { width: '100%', aspectRatio: 300 / 132 },
   tabOn: { transform: [{ scale: 1.04 }] },
   xpStart: { height: 46, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 6, paddingRight: 11,
-    borderTopRightRadius: 16, borderBottomRightRadius: 16, borderWidth: 1, borderColor: '#1E6A16' },
-  xpStartText: { color: '#FFF', fontFamily: F.bold, fontSize: 15, fontStyle: 'italic', textShadowColor: '#1A4A12', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 1 },
+    borderTopRightRadius: 16, borderBottomRightRadius: 16, borderWidth: 1, borderColor: TH.startEdge },
+  xpStartText: { color: TH.startText, fontFamily: F.bold, fontSize: 15, fontStyle: 'italic', textShadowColor: TH.startShadow, textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 1 },
   xpTab: { height: 32, borderRadius: 3, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: 1,
-    borderWidth: 1, borderColor: '#1A3F99' },
-  xpTabOn: { borderColor: '#10286A' },
+    borderWidth: 1, borderColor: TH.name === 'online' ? '#000000' : '#1A3F99' },
+  xpTabOn: { borderColor: TH.name === 'online' ? TH.accent : '#10286A' },
   xpTabText: { color: TH.tabText, fontFamily: F.semi, fontSize: 12, textShadowColor: '#0A2A6A', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 1 },
   trayDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 2 },
   clock: { color: '#FFF', fontSize: 12.5, fontFamily: F.reg },
-  startMenu: { position: 'absolute', left: 4, bottom: 56, width: 330, maxWidth: '96%', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#0B3D91', backgroundColor: '#FFF', elevation: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 10 },
+  startMenu: { position: 'absolute', left: 4, bottom: 56, width: 330, maxWidth: '96%', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: TH.menuEdge, backgroundColor: TH.menuBg, elevation: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 10 },
   smHead: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 },
   smHeadText: { color: '#FFF', fontFamily: F.bold, fontSize: 17, textShadowColor: '#0B3D91', textShadowRadius: 2, textShadowOffset: { width: 1, height: 1 } },
-  smLeft: { flex: 1.1, backgroundColor: '#FFF', paddingVertical: 4 },
-  smRight: { flex: 1, backgroundColor: '#D3E5FA', borderLeftWidth: 1, borderLeftColor: '#95BDEE', paddingVertical: 4 },
+  smLeft: { flex: 1.1, backgroundColor: TH.menuBg, paddingVertical: 4 },
+  smRight: { flex: 1, backgroundColor: TH.menuSide, borderLeftWidth: 1, borderLeftColor: TH.line, paddingVertical: 4 },
   smItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, paddingVertical: 7 },
-  smLabel: { fontFamily: F.semi, fontSize: 14, color: '#0B2A44' },
-  smSub: { fontSize: 11.5, color: '#4A6B84' },
-  smText: { fontSize: 13.5, color: '#0B2A44' },
+  smLabel: { fontFamily: F.semi, fontSize: 14, color: TH.menuText },
+  smSub: { fontSize: 11.5, color: TH.menuSub },
+  smText: { fontSize: 13.5, color: TH.menuText },
   smFoot: { flexDirection: 'row', justifyContent: 'flex-end', padding: 6 },
-  look: { flex: 1, padding: 8, borderWidth: 1, borderColor: '#7F9DB9', borderRadius: 4, backgroundColor: '#F4F8FC' },
-  lookOn: { borderColor: '#316AC5', backgroundColor: '#DCEBFA' },
+  look: { flex: 1, padding: 8, borderWidth: 1, borderColor: TH.line, borderRadius: 4, backgroundColor: TH.paneBg },
+  lookOn: { borderColor: TH.accent, backgroundColor: TH.rowPressed },
 });
 void C;
