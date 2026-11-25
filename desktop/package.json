@@ -1,0 +1,55 @@
+{
+  "name": "xifo-desktop",
+  "productName": "XI Forever Offline",
+  "version": "1.1.0",
+  "description": "XI: Forever Offline on your PC: Stinkshell chat, the wiki, news, portable fishing and your characters.",
+  "author": "XI: Forever Offline",
+  "license": "GPL-3.0",
+  "homepage": "https://xiforever.com",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis --publish never",
+    "dist:linux": "electron-builder --linux AppImage --publish never"
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.xiforever.desktop",
+    "productName": "XI Forever Offline",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "offline.html",
+      "icon.png"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png",
+      "artifactName": "XIFO-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "XI Forever Offline"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "icon.png",
+      "category": "Game",
+      "artifactName": "XIFO-${version}.${ext}",
+      "syncDesktopName": true
+    },
+    "publish": null
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hurami89/xifo-app.git"
+  },
+  "desktopName": "xifo-desktop.desktop"
+}

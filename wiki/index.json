@@ -1,0 +1,70 @@
+{
+ "version": 1,
+ "pages": [
+  {
+   "id": "welcome",
+   "title": "Welcome to XI: Forever Offline",
+   "group": "Start here"
+  },
+  {
+   "id": "install",
+   "title": "Getting started",
+   "group": "Start here"
+  },
+  {
+   "id": "squad",
+   "title": "Squad mates",
+   "group": "Playing"
+  },
+  {
+   "id": "living-world",
+   "title": "The living world",
+   "group": "Playing"
+  },
+  {
+   "id": "coop-hub",
+   "title": "Co-op & The Hub",
+   "group": "Playing"
+  },
+  {
+   "id": "hardcore",
+   "title": "Hardcore modes",
+   "group": "Playing"
+  },
+  {
+   "id": "character-pages",
+   "title": "Character pages & the Armory",
+   "group": "Playing"
+  },
+  {
+   "id": "portable-fishing",
+   "title": "Portable fishing",
+   "group": "Playing"
+  },
+  {
+   "id": "stinkshell",
+   "title": "Stinkshell chat",
+   "group": "Extras"
+  },
+  {
+   "id": "tetra-master",
+   "title": "Tetra Master",
+   "group": "Extras"
+  },
+  {
+   "id": "crystal-boy",
+   "title": "The Crystal Boy",
+   "group": "Extras"
+  },
+  {
+   "id": "linux",
+   "title": "Linux & Steam Deck",
+   "group": "Help"
+  },
+  {
+   "id": "help",
+   "title": "Help & the Discord",
+   "group": "Help"
+  }
+ ]
+}

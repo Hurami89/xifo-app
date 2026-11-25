@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "XIFO",
+    "slug": "xifo-app",
+    "version": "1.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#3D97EE",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.xiforever.app"
+    },
+    "android": {
+      "package": "com.xiforever.app",
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "backgroundColor": "#3D97EE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "softwareKeyboardLayoutMode": "resize",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "XI: Forever Offline",
+      "shortName": "XIFO",
+      "backgroundColor": "#0A1030",
+      "themeColor": "#1A2350",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-audio",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 260,
+          "resizeMode": "contain",
+          "backgroundColor": "#3D97EE"
+        }
+      ],
+      "./plugins/withReleaseSigning"
+    ],
+    "experiments": {
+      "baseUrl": "/app"
+    }
+  }
+}

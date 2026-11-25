@@ -1,0 +1,15 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>XI: Forever Offline</title>
+<style>
+body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0a1030;font-family:Tahoma,'Segoe UI',sans-serif;color:#e9ecf7}
+.win{width:320px;border:1px solid #8e97c2;border-radius:5px;overflow:hidden;background:rgba(12,18,44,.95);box-shadow:0 4px 14px #000}
+.t{background:linear-gradient(#45569a,#26336e,#1a2454);color:#f4e6b8;font-weight:bold;padding:7px 10px;border-bottom:1px solid #8e97c2}
+.b{padding:14px;line-height:1.5}
+button{margin-top:10px;padding:6px 16px;border:1px solid #f3e2a6;border-radius:3px;background:linear-gradient(#ecd58e,#c9a048,#8e6c24);color:#241800;font-weight:bold;cursor:pointer}
+</style></head>
+<body><div class="win"><div class="t">XI: Forever Offline</div><div class="b">
+Can't reach xiforever.com right now. Check your internet connection.<br>
+<button onclick="location.href=new URLSearchParams(location.search).get('u')||'https://xiforever.com/app/'">Try again</button>
+</div></div>
+<script>setTimeout(function(){location.href=new URLSearchParams(location.search).get('u')||'https://xiforever.com/app/'},15000)</script>
+</body></html>
