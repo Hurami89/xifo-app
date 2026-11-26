@@ -1,4 +1,4 @@
-// The desktop: wallpaper, the programs (Stinkshell chat, the wiki, news, portable fishing, ventures, your characters) and a
+// The desktop: wallpaper, the programs (Stinkshell chat, the wiki, news, portable fishing, ventures, Tetra Master, your characters) and a
 // taskbar: XP's own (Vana'diel look) or Aero glass with the art-pack buttons. Every program stays open while you
 // switch, so the chat room keeps running. On a computer (the website, the PC / Linux app) it sits in a phone-wide column.
 import React, { useEffect, useState } from 'react';
@@ -13,18 +13,20 @@ import NewsScreen from './NewsScreen';
 import MeScreen from './MeScreen';
 import FishScreen from './FishScreen';
 import VenturesScreen from './VenturesScreen';
+import TetraScreen from './TetraScreen';
 import type { Card } from './armory';
 import { ART, Btn, C, F, Field, T } from './ui';
 import { TH, THEMES, ThemeName } from './theme';
 import { getJSON, LINKS, setJSON } from './store';
 import { APP_VERSION, checkUpdate, Update } from './update';
 
-type Tab = 'chat' | 'wiki' | 'news' | 'fish' | 'vent' | 'me';
-const TABS: Tab[] = ['chat', 'wiki', 'news', 'fish', 'vent', 'me'];
-const LABEL: Record<Tab, string> = { chat: 'Chat', wiki: 'Wiki', news: 'News', fish: 'Fish', vent: 'Venture', me: 'Me' };
+type Tab = 'chat' | 'wiki' | 'news' | 'fish' | 'vent' | 'tm' | 'me';
+const TABS: Tab[] = ['chat', 'wiki', 'news', 'fish', 'vent', 'tm', 'me'];
+const LABEL: Record<Tab, string> = { chat: 'Chat', wiki: 'Wiki', news: 'News', fish: 'Fish', vent: 'Venture', tm: 'Cards', me: 'Me' };
 const ICON: Record<Tab, any> = {
   chat: ART.buddy.phone, wiki: ART.buddy.web, news: ART.buddy.game,
   fish: require('../assets/art/icon_fish.png'), vent: require('../assets/art/icon_vent.png'), me: require('../assets/art/icon_me.png'),
+  tm: require('../assets/art/icon_tm.png'),
 };
 const XP = TH.tabMode === 'xp';
 const WIDE = Platform.OS === 'web';
@@ -115,6 +117,7 @@ function StartMenu({ go, close, update, setUpdate }: { go: (t: Tab) => void; clo
               {item(ART.buddy.game, 'XIFO News', "What's new", () => go('news'))}
               {item(ICON.fish, 'Portable Fishing', 'Fish on the go', () => go('fish'))}
               {item(ICON.vent, 'Ventures', 'Send your squad out', () => go('vent'))}
+              {item(ICON.tm, 'Tetra Master', 'Your cards from the game', () => go('tm'))}
               {item(ICON.me, 'My Characters', 'Your profile', () => go('me'))}
             </View>
             <View style={st.smRight}>
@@ -164,9 +167,9 @@ export default function Desktop() {
         {TABS.map((t) => (
           <Pressable key={t} onPress={() => go(t)} accessibilityRole="tab" accessibilityLabel={t} style={{ flex: 1 }}>
             {XP ? (
-              <LinearGradient colors={(tab === t ? TH.tabOnGrad : TH.tabGrad) as any} style={[st.xpTab, tab === t && st.xpTabOn]}>
-                <Image source={ICON[t]} style={{ width: 14, height: 14 }} />
-                <T style={[st.xpTabText, LABEL[t].length > 5 && { fontSize: 10.5 }]} numberOfLines={1}>{LABEL[t]}</T>
+              <LinearGradient colors={(tab === t ? TH.tabOnGrad : TH.tabGrad) as any} style={[st.xpTab, TH.tabStack && st.stackTab, tab === t && st.xpTabOn]}>
+                <Image source={ICON[t]} style={TH.tabStack ? { width: 17, height: 17 } : { width: 14, height: 14 }} />
+                <T style={[st.xpTabText, TH.tabStack ? st.stackText : LABEL[t].length > 5 && { fontSize: 10.5 }]} numberOfLines={1}>{LABEL[t]}</T>
               </LinearGradient>
             ) : (
               <Image source={ART.tabs[t][tab === t ? 1 : 0]} style={[st.tab, tab === t && st.tabOn]} resizeMode="contain" />
@@ -190,6 +193,7 @@ export default function Desktop() {
             <View style={[st.screen, tab !== 'news' && st.hidden]}><NewsScreen goChat={() => go('chat')} goWiki={() => go('wiki')} /></View>
             {seen.fish && <View style={[st.screen, tab !== 'fish' && st.hidden]}><FishScreen cardsHint={cards} goMe={() => go('me')} active={tab === 'fish'} /></View>}
             {seen.vent && <View style={[st.screen, tab !== 'vent' && st.hidden]}><VenturesScreen active={tab === 'vent'} /></View>}
+            {seen.tm && <View style={[st.screen, tab !== 'tm' && st.hidden]}><TetraScreen active={tab === 'tm'} goMe={() => go('me')} /></View>}
             {seen.me && <View style={[st.screen, tab !== 'me' && st.hidden]}><MeScreen onCards={setCards} /></View>}
           </View>
         </SafeAreaView>
@@ -215,6 +219,9 @@ const st = StyleSheet.create({
   xpTab: { height: 32, borderRadius: 3, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: 1,
     borderWidth: 1, borderColor: TH.name === 'online' ? '#000000' : '#1A3F99' },
   xpTabOn: { borderColor: TH.name === 'online' ? TH.accent : '#10286A' },
+  // (2026-11-25) Dark Fantasy: seven programs, so each button is its icon over a small name
+  stackTab: { height: 40, flexDirection: 'column', gap: 0, paddingTop: 2 },
+  stackText: { fontFamily: TH.titleFont, fontSize: 9, letterSpacing: 0.3, textShadowColor: '#000', marginTop: 1 },
   xpTabText: { color: TH.tabText, fontFamily: F.semi, fontSize: 12, textShadowColor: '#0A2A6A', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 1 },
   badge: { position: 'absolute', top: 3, right: 4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#E8302A',
     borderWidth: 1, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
@@ -223,7 +230,7 @@ const st = StyleSheet.create({
   clock: { color: '#FFF', fontSize: 12.5, fontFamily: F.reg },
   startMenu: { position: 'absolute', left: 4, bottom: 56, width: 330, maxWidth: '96%', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: TH.menuEdge, backgroundColor: TH.menuBg, elevation: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 10 },
   smHead: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 },
-  smHeadText: { color: '#FFF', fontFamily: F.bold, fontSize: 17, textShadowColor: '#0B3D91', textShadowRadius: 2, textShadowOffset: { width: 1, height: 1 } },
+  smHeadText: { color: TH.titleText, fontFamily: TH.titleFont, fontSize: TH.titleFont === 'Cinzel' ? 16 : 17, textShadowColor: TH.name === 'dark' ? '#000' : '#0B3D91', textShadowRadius: 2, textShadowOffset: { width: 1, height: 1 } },
   smLeft: { flex: 1.1, backgroundColor: TH.menuBg, paddingVertical: 4 },
   smRight: { flex: 1, backgroundColor: TH.menuSide, borderLeftWidth: 1, borderLeftColor: TH.line, paddingVertical: 4 },
   smItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, paddingVertical: 7 },

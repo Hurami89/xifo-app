@@ -21,10 +21,26 @@ const FX = {
   depart: require('../assets/sounds/sfx/depart.wav'),
   home: require('../assets/sounds/sfx/home.wav'),
   levelup: require('../assets/sounds/sfx/levelup.wav'),
+  // Tetra Master (Nalfey's sounds)
+  tm_battle: require('../assets/tetra/snd/snd_card_battle.mp3'),
+  tm_choose: require('../assets/tetra/snd/snd_choose_card.mp3'),
+  tm_coin: require('../assets/tetra/snd/snd_coin.mp3'),
+  tm_combo: require('../assets/tetra/snd/snd_combo_woosh.mp3'),
+  tm_cursor: require('../assets/tetra/snd/snd_cursor.mp3'),
+  tm_error: require('../assets/tetra/snd/snd_error.mp3'),
+  tm_flip: require('../assets/tetra/snd/snd_flip_card.mp3'),
+  tm_lose_card: require('../assets/tetra/snd/snd_lose_card.mp3'),
+  tm_lose: require('../assets/tetra/snd/snd_lose_game.mp3'),
+  tm_perfect: require('../assets/tetra/snd/snd_perfect_game.mp3'),
+  tm_put: require('../assets/tetra/snd/snd_put.mp3'),
+  tm_tie: require('../assets/tetra/snd/snd_tie_game.mp3'),
+  tm_win_card: require('../assets/tetra/snd/snd_win_card.mp3'),
+  tm_win: require('../assets/tetra/snd/snd_win_game.mp3'),
 };
 const MUSIC = {
   fishing: require('../assets/sounds/bgm/fishing.mp3'),
   ventures: require('../assets/sounds/bgm/ventures.mp3'),
+  tetra: require('../assets/tetra/snd/mus_quadmist.mp3'),
 };
 export type Fx = keyof typeof FX;
 export type Track = keyof typeof MUSIC;

@@ -27,6 +27,7 @@ export default function App() {
     'Selawik-Bold': require('./assets/fonts/selawkb.ttf'),
     Pixel: require('./assets/fonts/PixelifySans-Regular.ttf'),
     'Pixel-Bold': require('./assets/fonts/PixelifySans-Bold.ttf'),
+    Cinzel: require('./assets/tetra/Cinzel-Bold.ttf'),
   });
   const [Desktop, setDesktop] = useState<React.ComponentType | null>(null);
   useEffect(() => {

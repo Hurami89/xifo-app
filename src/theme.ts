@@ -2,13 +2,15 @@
 // styles are made with the chosen look. Changing it takes effect the next time the app opens.
 //   vanadiel  the default: Final Fantasy XI's own menus (navy glass, silver edges, gold) on a 2006 Windows XP desktop
 //   aero      the launcher's Aero theme: mid-2000s Frutiger Aero glass, sky and bubbles
-//   online    the default (2026-11-25): a dark 2003 online-service look, charcoal chrome, beveled buttons, buddy-list
-//             yellow, over darkened art from the art packs
-export type ThemeName = 'online' | 'vanadiel' | 'aero';
+//   online    a dark 2003 online-service look, charcoal chrome, beveled buttons, buddy-list yellow, over darkened art
+//   dark      the default (2026-11-25, the user: "i want the theme of the app to be dark fantasy"): black and dusk-violet
+//             stone, old-gold edges and Cinzel lettering, under a pale moon (Tetra Master's own colours)
+export type ThemeName = 'dark' | 'online' | 'vanadiel' | 'aero';
 
 const aero = {
   name: 'aero' as ThemeName,
   label: 'Frutiger Aero',
+  titleFont: 'Selawik-Bold', btnFont: 'Selawik-Semibold', tabStack: false,
   statusBar: 'light' as 'light' | 'dark',
   wallpaper: require('../assets/art/wallpaper.jpg'),
   logo: require('../assets/art/logo_tile.png'),
@@ -110,9 +112,45 @@ const online: Theme = {
   line: '#3A4256', red: '#E06050', green: '#5FC86A', gold: '#FFD447', panel: '#171A22', pane: '#0E1016',
 };
 
-export const THEMES: Record<ThemeName, Theme> = { online, vanadiel, aero };
-export const DEFAULT_THEME: ThemeName = 'online';
-export const TH: Theme = { ...online };
+const dark: Theme = {
+  ...online,
+  name: 'dark',
+  label: 'Dark Fantasy',
+  titleFont: 'Cinzel', btnFont: 'Cinzel', tabStack: true,
+  wallpaper: require('../assets/art/d_wallpaper.jpg'),
+  logo: require('../assets/art/v_logo_tile.png'),
+  banners: [require('../assets/art/d_banner_1.jpg'), require('../assets/art/d_banner_2.jpg'), require('../assets/art/d_banner_3.jpg'),
+    require('../assets/art/d_banner_4.jpg'), require('../assets/art/d_banner_5.jpg')],
+  ink: '#E9E2D0', dim: '#A89F8E', link: '#D9B66A', accent: '#E8C878', onWall: '#E8C878', onWallShadow: '#000000',
+  me: '#E8C878', other: '#B9A3E8', system: '#9A92A8', enter: '#9BC78A', hardcore: '#C99BFF', err: '#F08070',
+  winBg: 'rgba(14,9,24,0.94)', winOuter: '#0A0612', winBorder: '#8A6A2E', winRadius: 3,
+  titleGrad: ['#2A1A3E', '#1A0F28', '#0E0818'], titleText: '#E8C878', titleTextShadow: '#000000', titleShine: 0.04,
+  capMin: ['#3A2A50', '#22162F'], capClose: ['#7A2A22', '#4A140E'], capBorder: '#8A6A2E',
+  paneBg: 'rgba(5,3,10,0.6)', paneEdge: '#5A4626', rowLine: 'rgba(232,200,120,0.12)', rowPressed: 'rgba(138,106,46,0.28)',
+  stripGrad: ['#2A1A3E', '#160C22'], stripText: '#E8C878',
+  btnGrad: ['#3A2350', '#2A1A3E', '#1A0F28'], btnBorder: '#8A6A2E', btnText: '#E8C878', btnShine: 0.05, btnRadius: 3,
+  primaryGrad: ['#E8C878', '#B8903E', '#7A5A1E'], primaryBorder: '#F3DFA0', primaryText: '#1A0F06', primaryShadow: '#F8E8B8', primaryRadius: 3,
+  activeGrad: ['#4A2E66', '#2A1A3E'], disabledGrad: ['#241A2E', '#18101F'], disabledText: '#6E6478',
+  fieldBg: '#07050C', fieldEdge: '#5A4626', fieldText: '#E9E2D0', placeholder: '#6E6478',
+  taskGrad: ['#2A1A3E', '#1A0F28', '#0E0818', '#07050C'], taskEdge: '#8A6A2E', tabMode: 'xp',
+  tabGrad: ['#2E1E44', '#1A0F28'], tabOnGrad: ['#4A2E66', '#2A1A3E'], tabText: '#E8C878',
+  chipBg: 'rgba(14,9,24,0.9)', chipEdge: '#5A4626', chipOn: '#B8903E', chipOnEdge: '#F3DFA0', chipText: '#E9E2D0', chipOnText: '#1A0F06',
+  noteBg: 'rgba(80,58,14,0.45)', noteEdge: '#8A6A2E', noteText: '#F3DFA0', hcBg: 'rgba(80,40,110,0.35)', hcEdge: '#8A5AB0',
+  gilBg: 'rgba(110,80,16,0.45)', gilEdge: '#B8903E', gilText: '#F3DFA0', maxBg: 'rgba(184,144,62,0.3)', maxEdge: '#E8C878',
+  boxBg: 'rgba(0,0,0,0.4)', boxEdge: '#5A4626',
+  barBg: 'rgba(0,0,0,0.5)', barFill: '#B8903E', dotOn: '#E8C878', dotOff: '#5E5468', statBg: 'rgba(14,9,24,0.92)',
+  heroEdge: '#8A6A2E', menuBg: '#120C1C', menuSide: '#1E1430', menuPressed: '#4A2E66', menuHead: ['#2A1A3E', '#1A0F28', '#0E0818'],
+  menuText: '#E9E2D0', menuSub: '#A89F8E', menuEdge: '#8A6A2E', menuFoot: ['#1E1430', '#0E0818'],
+  startGrad: ['#E8C878', '#B8903E', '#7A5A1E'], startOnGrad: ['#7A5A1E', '#B8903E'], startEdge: '#3A2A0E', startText: '#1A0F06', startShadow: '#F8E8B8',
+  fightShade: 'rgba(5,3,10,0.6)', meterBg: '#07050C', staminaGrad: ['#E8907A', '#A8301C'], timeGrad: ['#B9A3E8', '#5A3A9A'],
+  arrowBox: ['#2A1A3E', '#0E0818'], arrow: '#E9E2D0', arrowGold: '#E8C878', bigGrad: ['#3A2350', '#2A1A3E', '#1A0F28'], bigBorder: '#8A6A2E',
+  chatMode: 'ffxi', chatSay: '#9EF59E', feedGood: '#9BC78A', feedBad: '#F08070', feedSkill: '#B9A3E8', feedInfo: '#E8C878',
+  line: '#5A4626', red: '#D8584A', green: '#7FC86A', gold: '#E8C878', panel: 'rgba(14,9,24,0.94)', pane: 'rgba(5,3,10,0.6)',
+};
+
+export const THEMES: Record<ThemeName, Theme> = { dark, online, vanadiel, aero };
+export const DEFAULT_THEME: ThemeName = 'dark';
+export const TH: Theme = { ...dark };
 
 export function applyTheme(name: string | null | undefined) {
   Object.assign(TH, THEMES[(name as ThemeName) in THEMES ? (name as ThemeName) : DEFAULT_THEME]);

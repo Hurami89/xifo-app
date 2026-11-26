@@ -141,8 +141,12 @@ export function Profile({ c, pending }: { c: Card; pending: Pending[] }) {
             </View>
           </View>
         </View>
-        {pending.length ? (
+        {pending.some((p) => p.count) ? (
           <T style={st.info}>{pending.reduce((n, p) => n + p.count, 0)} catch(es) from this phone are waiting: they arrive in the delivery box at your next PLAY.</T>
+        ) : null}
+        {pending.some((p) => p.tetra) ? (
+          <T style={st.info}>Tetra Master: {pending.reduce((n, p) => n + (p.tetra?.gil || 0), 0).toLocaleString('en-US')} gil
+            {pending.some((p) => p.tetra?.upgrades.length) ? ' and class-ups' : ''} from this phone arrive at your next PLAY.</T>
         ) : null}
         <Pane style={{ marginTop: 10 }}>
           <Strip title="Equipment" />

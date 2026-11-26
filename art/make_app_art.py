@@ -97,11 +97,14 @@ TABS = {
     'tab_fish': ('FISH', ['mini-mithra'], 'aqua'),
     'tab_me': ('ME', ['hume-f'], 'sky'),
     'tab_vent': ('VENTURE', ['apu-red'], 'leaf'),
+    'tab_tm': ('CARDS', ['ferena'], 'sky'),          # (2026-11-25) Tetra Master
 }
 
 
-def tabs():
+def tabs(only=None):
     for key, val in TABS.items():
+        if only and key not in only:
+            continue
         B.BUTTONS[key] = val
         for hover in (False, True):
             img = B.make_button(key, size=(300, 132), hover=hover)
@@ -226,6 +229,22 @@ def small_icons():
     d.line([(cx - N * 0.27, cy + N * 0.12), (cx - N * 0.08, cy + N * 0.3)], fill=(255, 255, 255, 255), width=S * 5)
     d.polygon([(cx + N * 0.02, cy - N * 0.3), (cx + N * 0.3, cy - N * 0.2), (cx + N * 0.02, cy - N * 0.1)], fill=(255, 230, 120, 255))
     finish_disc(img, S, 'icon_vent.png')
+
+
+def tetra_icon():
+    """(2026-11-25) The Tetra Master taskbar icon: two cards, one with an arrow, on a violet disc."""
+    img, S = glossy_disc(64, (210, 170, 255), (110, 60, 200), (60, 25, 120))
+    N = img.width
+    d = ImageDraw.Draw(img)
+    cx = cy = N / 2
+    w, h = N * 0.30, N * 0.40
+    d.rounded_rectangle([cx - w * 0.95, cy - h * 0.62, cx + w * 0.05, cy + h * 0.38], radius=S * 3, fill=(235, 225, 255, 255))
+    d.rounded_rectangle([cx - w * 0.15, cy - h * 0.42, cx + w * 0.85, cy + h * 0.58], radius=S * 3, fill=(255, 255, 255, 255),
+                        outline=(110, 60, 200, 255), width=S * 2)
+    ax, ay = cx + w * 0.35, cy + h * 0.08
+    d.polygon([(ax, ay - N * 0.12), (ax + N * 0.07, ay - N * 0.02), (ax - N * 0.07, ay - N * 0.02)], fill=(230, 120, 30, 255))
+    d.rectangle([ax - N * 0.025, ay - N * 0.03, ax + N * 0.025, ay + N * 0.09], fill=(230, 120, 30, 255))
+    finish_disc(img, S, 'icon_tm.png')
 
 
 def fish_sprites():
@@ -383,7 +402,10 @@ def faces():
         fh.write('\n'.join(lines) + '\n')
 
 
-if __name__ == '__main__':
+if __name__ == '__main__' and len(sys.argv) > 2 and sys.argv[2] == 'tm':
+    tabs(only={'tab_tm'})                  # python art/make_app_art.py KIT tm: only the Tetra Master pieces
+    tetra_icon()
+elif __name__ == '__main__':
     faces()
     vanadiel()
     copies()
@@ -395,4 +417,5 @@ if __name__ == '__main__':
     buddies()
     emoticons()
     small_icons()
+    tetra_icon()
     fish_sprites()

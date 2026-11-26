@@ -13,8 +13,12 @@ export type Card = {
   fishing: { skill: number; rank: number; cap: number; rate?: number; rods: { id: number; name: string }[];
     bait: { id: number; name: string; qty: number }[]; catches?: number };
   _vis: 'public' | 'link' | 'hidden'; _synced: number; _link: string;
+  // (2026-11-25) Tetra Master: unlocked at Luto Mewrilah, the in-game collection (hidden numbers too) and deck
+  tetra?: { unlocked: boolean; cards: TmCard[]; deck: number[]; gilRate: number };
 };
-export type Pending = { id: string; char: string; made: number; count: number; skill: number; gil: number };
+export type TmCard = { uid: number; id: number; type: 'P' | 'M' | 'X' | 'A'; arrows: number; atk: number; pdef: number; mdef: number };
+export type Pending = { id: string; char: string; made: number; count: number; skill: number; gil: number;
+  tetra?: { gil: number; wins: number; upgrades: { uid: number }[] } | null };
 
 export const JOBS = ['WAR', 'MNK', 'WHM', 'BLM', 'RDM', 'THF', 'PLD', 'DRK', 'BST', 'BRD', 'RNG', 'SAM', 'NIN', 'DRG', 'SMN', 'BLU',
   'COR', 'PUP', 'DNC', 'SCH', 'GEO', 'RUN'];
@@ -39,9 +43,9 @@ async function phoneKey(): Promise<string> {
   return key;
 }
 
-export async function call(path: string, body?: unknown): Promise<any> {
+export async function call(path: string, body?: unknown, timeoutMs = 20000): Promise<any> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 20000);
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch((await siteUrl()) + '/armory/api' + path, {
       method: body === undefined ? 'GET' : 'POST',
@@ -75,7 +79,8 @@ export async function cachedMe(): Promise<{ cards: Card[]; pending: Pending[]; a
 }
 
 export type Report = { id: string; char: string; catches: { item: number; count: number; name: string }[]; skill: number;
-  gil: number; gilFound: number; bait: { item: number; count: number }[] };
+  gil: number; gilFound: number; bait: { item: number; count: number }[];
+  tetra?: { gil: number; wins: number; played: number; upgrades: { uid: number; id: number; type: string }[] } };
 
 export async function sendReport(r: Report): Promise<{ ok?: boolean; error?: string; offline?: boolean }> {
   return call('/fish', r);
