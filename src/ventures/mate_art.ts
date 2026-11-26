@@ -1,8 +1,8 @@
 // Made by art/kaza_mates.py: squad mates from Kaza's heroes (his art, with permission), 40 x 40 a frame, 4x.
-// Draw MATE_SHEET, then each MATE_MASK row tinted (rows: hair0, hair1, hair2, hair3, skin0, skin1, skin2, skin3, elf_ink, elf_ear, cat_ink, cat_ears, tail).
+// Draw MATE_SHEET, then each MATE_MASK row tinted (rows: hair0, hair1, hair2, hair3, skin0, skin1, skin2, skin3, elf_ink, elf_ear, cat_ink, cat_ears, tail_ink, tail).
 export const MATE_F = 40;
-export const MASK_ROWS = 13;
-export const MASK_ROW: Record<string, number> = { hair0: 0, hair1: 1, hair2: 2, hair3: 3, skin0: 4, skin1: 5, skin2: 6, skin3: 7, elf_ink: 8, elf_ear: 9, cat_ink: 10, cat_ears: 11, tail: 12 };
+export const MASK_ROWS = 14;
+export const MASK_ROW: Record<string, number> = { hair0: 0, hair1: 1, hair2: 2, hair3: 3, skin0: 4, skin1: 5, skin2: 6, skin3: 7, elf_ink: 8, elf_ear: 9, cat_ink: 10, cat_ears: 11, tail_ink: 12, tail: 13 };
 export const MATE_SHEET: Record<string, any> = {
   Aeodin_WAR: require('../../assets/ventures/km/Aeodin_WAR.png'),
   Aeodin_MNK: require('../../assets/ventures/km/Aeodin_MNK.png'),
@@ -151,6 +151,83 @@ export const MATE_MASK: Record<string, any> = {
   Lazulai_COR: require('../../assets/ventures/km/Lazulai_COR_m.png'),
   Lazulai_PUP: require('../../assets/ventures/km/Lazulai_PUP_m.png'),
 };
+/** the row under the chin per frame (head above, body below), for sizing the races apart */
+export const NECK: Record<string, number[]> = {
+  Aeodin_WAR: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_MNK: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_WHM: [27, 27, 23, 25, 24, 25, 23, 23, 25, 23],
+  Aeodin_BLM: [23, 23, 22, 23, 22, 23, 22, 23, 24, 22],
+  Aeodin_RDM: [24, 24, 23, 24, 24, 24, 23, 25, 26, 23],
+  Aeodin_THF: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_PLD: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_DRK: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_BST: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_BRD: [22, 22, 21, 22, 22, 22, 21, 23, 23, 21],
+  Aeodin_RNG: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_SAM: [25, 25, 23, 25, 24, 25, 23, 25, 26, 23],
+  Aeodin_NIN: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_DRG: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_SMN: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_BLU: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_COR: [19, 19, 18, 19, 18, 19, 18, 20, 20, 18],
+  Aeodin_PUP: [23, 23, 22, 23, 22, 23, 22, 24, 25, 22],
+  Dario_WAR: [18, 18, 18, 19, 18, 19, 18, 17, 20, 18],
+  Dario_MNK: [18, 18, 18, 19, 18, 19, 18, 17, 20, 18],
+  Dario_WHM: [27, 27, 23, 25, 24, 25, 23, 25, 26, 23],
+  Dario_BLM: [25, 25, 23, 25, 24, 25, 23, 25, 26, 23],
+  Dario_RDM: [25, 25, 23, 25, 24, 25, 23, 25, 26, 23],
+  Dario_THF: [18, 18, 18, 19, 18, 19, 18, 17, 20, 18],
+  Dario_PLD: [18, 18, 18, 19, 18, 19, 18, 17, 20, 18],
+  Dario_DRK: [18, 18, 18, 19, 18, 19, 18, 17, 20, 18],
+  Dario_BST: [18, 18, 18, 19, 18, 19, 18, 17, 20, 18],
+  Dario_BRD: [23, 23, 22, 23, 22, 23, 22, 23, 24, 22],
+  Dario_RNG: [18, 18, 18, 19, 18, 19, 18, 17, 20, 18],
+  Dario_SAM: [28, 28, 23, 25, 24, 25, 23, 25, 26, 23],
+  Dario_NIN: [18, 18, 18, 19, 18, 19, 18, 17, 20, 18],
+  Dario_DRG: [21, 21, 19, 21, 20, 21, 19, 21, 22, 19],
+  Dario_SMN: [18, 18, 18, 19, 18, 19, 18, 17, 20, 18],
+  Dario_BLU: [18, 18, 18, 19, 18, 19, 18, 17, 20, 18],
+  Dario_COR: [21, 21, 19, 21, 20, 21, 19, 21, 22, 19],
+  Dario_PUP: [20, 20, 23, 20, 24, 20, 23, 20, 26, 23],
+  Kayame_WAR: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_MNK: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_WHM: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_BLM: [29, 29, 27, 29, 28, 29, 27, 25, 32, 27],
+  Kayame_RDM: [25, 25, 23, 25, 24, 25, 23, 25, 28, 23],
+  Kayame_THF: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_PLD: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_DRK: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_BST: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_BRD: [23, 23, 22, 23, 22, 23, 22, 23, 26, 22],
+  Kayame_RNG: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_SAM: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_NIN: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_DRG: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_SMN: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_BLU: [19, 19, 18, 19, 19, 19, 18, 20, 23, 18],
+  Kayame_COR: [25, 25, 20, 25, 24, 25, 20, 25, 28, 20],
+  Kayame_PUP: [23, 23, 22, 23, 22, 23, 22, 23, 26, 22],
+  Lazulai_WAR: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_MNK: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_WHM: [28, 28, 23, 25, 24, 25, 23, 28, 28, 23],
+  Lazulai_BLM: [28, 28, 27, 28, 27, 28, 27, 25, 31, 27],
+  Lazulai_RDM: [25, 25, 23, 25, 24, 25, 23, 25, 31, 23],
+  Lazulai_THF: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_PLD: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_DRK: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_BST: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_BRD: [23, 23, 22, 23, 23, 23, 22, 23, 27, 22],
+  Lazulai_RNG: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_SAM: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_NIN: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_DRG: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_SMN: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_BLU: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_COR: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+  Lazulai_PUP: [18, 18, 17, 17, 17, 18, 17, 18, 21, 17],
+};
+/** race -> [head x, head y, body x, body y] */
+export const RACE_FIT: Record<string, number[]> = { hume: [1, 1, 1, 1], mithra: [0.97, 0.97, 0.97, 0.97], taru: [0.95, 0.95, 0.8, 0.52], elvaan: [1, 1, 0.94, 1.25], galka: [1.1, 1.1, 1.45, 1.3] };
 /** race id -> [race, sex, scale] */
 export const RACE_LOOK: Record<number, [string, string, number]> = { 1: ['hume', 'm', 1.0], 2: ['hume', 'f', 1.0], 3: ['elvaan', 'm', 1.07], 4: ['elvaan', 'f', 1.07], 5: ['taru', 'm', 0.78], 6: ['taru', 'f', 0.78], 7: ['mithra', 'f', 0.97], 8: ['galka', 'm', 1.15] };
 /** hair colours by race and face (0..15): 4 tones each, shine to dark */

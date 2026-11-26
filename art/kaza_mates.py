@@ -45,7 +45,7 @@ SKIN = {(246, 211, 188): 0, (251, 220, 200): 0, (235, 193, 167): 1, (249, 193, 1
 HEAD_PART = {'Aeodin': 0.42, 'Dario': 0.42, 'Kayame': 0.55, 'Lazulai': 0.62}   # where hair may start (outfits share colours)
 # mask rows
 MASKS = ['hair0', 'hair1', 'hair2', 'hair3', 'skin0', 'skin1', 'skin2', 'skin3', 'elf_ink', 'elf_ear', 'cat_ink', 'cat_ears',
-         'tail']
+         'tail_ink', 'tail']
 
 
 def mv_frame(sheet, motion, k):
@@ -169,7 +169,7 @@ def frame_and_masks(src, hero):
         d = ImageDraw.Draw(final['tail'])
         d.line([(tx, ty), (tx - 3, ty - 1), (tx - 5, ty - 4), (tx - 5, ty - 7)], fill=255, width=2)
     # a dark rim round the added parts
-    for part, ink in (('elf_ear', 'elf_ink'), ('cat_ears', 'cat_ink'), ('tail', 'cat_ink')):
+    for part, ink in (('elf_ear', 'elf_ink'), ('cat_ears', 'cat_ink'), ('tail', 'tail_ink')):
         mp = final[part].load()
         ip = final[ink].load()
         for y in range(F):
@@ -229,6 +229,27 @@ SKIN_OF = {'hume': (238, 192, 160), 'elvaan': (236, 198, 170), 'taru': (246, 204
 RACES = {1: ('hume', 'm'), 2: ('hume', 'f'), 3: ('elvaan', 'm'), 4: ('elvaan', 'f'), 5: ('taru', 'm'), 6: ('taru', 'f'),
          7: ('mithra', 'f'), 8: ('galka', 'm')}
 SCALE = {'hume': 1.0, 'elvaan': 1.07, 'taru': 0.78, 'mithra': 0.97, 'galka': 1.15}
+# each race's build: the head and the body (below the neck) sized apart, (head x, head y, body x, body y):
+# Tarutaru a big head on a short round body, Elvaan a long slender body, Galka a broad, tall, heavy body
+FIT = {'hume': (1, 1, 1, 1), 'mithra': (0.97, 0.97, 0.97, 0.97), 'taru': (0.95, 0.95, 0.8, 0.52),
+       'elvaan': (1, 1, 0.94, 1.25), 'galka': (1.1, 1.1, 1.45, 1.3)}
+
+
+def necks(name):
+    """the row under the chin in each of the 10 frames (40-px units), from the saved mask sheet"""
+    m = Image.open(os.path.join(OUT, name + '_m.png')).convert('RGBA')
+    m = m.resize((m.width // UP, m.height // UP), Image.NEAREST).split()[3].load()
+    out = []
+    for f in range(10):
+        hair = [y for r in range(4) for y in range(F) for x in range(F) if m[f * F + x, r * F + y]]
+        skin = [y for r in range(4, 8) for y in range(F) for x in range(F) if m[f * F + x, r * F + y]]
+        if not hair:
+            out.append(16)
+            continue
+        top = min(hair)
+        face = [y for y in skin if y <= top + 16]
+        out.append(min(F - 4, (max(face) + 1) if face else max(hair) + 1))
+    return out
 
 
 def hexc(c):
@@ -258,6 +279,12 @@ def main(only=None):
          'export const MATE_SHEET: Record<string, any> = {']
     L += [f'  {k}: {req(k)},' for k in keys] + ['};', 'export const MATE_MASK: Record<string, any> = {']
     L += [f'  {k}: {req(k + "_m")},' for k in keys] + ['};']
+    L.append('/** the row under the chin per frame (head above, body below), for sizing the races apart */')
+    L.append('export const NECK: Record<string, number[]> = {')
+    L += [f'  {k}: [{", ".join(str(v) for v in necks(k))}],' for k in keys] + ['};']
+    L.append('/** race -> [head x, head y, body x, body y] */')
+    L.append('export const RACE_FIT: Record<string, number[]> = { %s };' %
+             ', '.join(f"{r}: [{', '.join(str(v) for v in f)}]" for r, f in FIT.items()))
     L.append('/** race id -> [race, sex, scale] */')
     L.append('export const RACE_LOOK: Record<number, [string, string, number]> = { %s };' %
              ', '.join(f"{i}: ['{r}', '{s}', {SCALE[r]}]" for i, (r, s) in RACES.items()))

@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { FRAME, GROUND, MOB_H, MOB_W, MOBS, MOBT, MOBT_H, MOBT_W, PARTY, PARTY_H, PARTY_W, SCENES, SCENE_H, SCENE_W } from './art';
-import { HAIR_TONES, MASK_ROW, MASK_ROWS, MATE_F, MATE_MASK, MATE_SHEET, RACE_LOOK, SKIN_TONES } from './mate_art';
+import { HAIR_TONES, MASK_ROW, MASK_ROWS, MATE_F, MATE_MASK, MATE_SHEET, NECK, RACE_FIT, RACE_LOOK, SKIN_TONES } from './mate_art';
 import type { Camp, Ev, PartyMember, VMate } from './api';
 import { F } from '../ui';
 
@@ -39,28 +39,57 @@ function heroFor(race: number, face: number): string {
 const INK = '#181418';
 const MATE_SCALE = 0.85;      // his heroes are drawn a little bigger than the party and the camps were laid out for
 
-/** A squad mate as in the game: Kaza's hero in the job's outfit, with the mate's own hair colour (by face) and race
- * (skin, size, Elvaan ears, Mithra ears and tail). */
+/** One horizontal slice (rows y0..y1) of one frame of a sheet, sized sx by sy, centred on cx with its bottom on `bottom`
+ * (grid pixels). Used to give each race its build: the head and the body are sized apart. */
+function Slice({ src, frame, row = 0, rows = 1, y0, y1, sx, sy, cx, bottom, P, tint }: {
+  src: any; frame: number; row?: number; rows?: number; y0: number; y1: number; sx: number; sy: number; cx: number;
+  bottom: number; P: number; tint?: string;
+}) {
+  const fw = MATE_F * sx * P;
+  const fh = MATE_F * sy * P;
+  const h = (y1 - y0) * sy * P;
+  return (
+    <View style={{ position: 'absolute', left: Math.round(cx * P - fw / 2), top: Math.round(bottom * P - h), width: Math.ceil(fw),
+      height: Math.ceil(h), overflow: 'hidden' }}>
+      <Image source={src} style={{ position: 'absolute', left: -frame * fw, top: -(row * fh) - y0 * sy * P, width: fw * 10,
+        height: fh * rows, ...(tint ? { tintColor: tint } : null) }} />
+    </View>
+  );
+}
+
+/** A squad mate as in the game: Kaza's hero in the job's outfit, with the mate's own hair colour (by face) and race:
+ * skin, build (Taru short and round, Elvaan long, Galka broad and big), Elvaan ears, Mithra ears and tail, Galka tail. */
 function Mate({ m, frame, x, y, P }: { m: Extract<Member, { kind: 'mate' }>; frame: number; x: number; y: number; P: number }) {
-  const [race, sex, scale] = RACE_LOOK[m.race] || RACE_LOOK[1];
+  const [race, sex] = RACE_LOOK[m.race] || RACE_LOOK[1];
   const face = Math.max(0, Math.min(15, m.face | 0));
   const key = `${heroFor(m.race, face)}_${m.job}`;
   const sheet = MATE_SHEET[key] ? key : 'Aeodin_WAR';
   const hair = (HAIR_TONES[race] || HAIR_TONES.hume)[face];
   const skin = SKIN_TONES[race] || SKIN_TONES.hume;
-  const at = { fw: MATE_F, fh: MATE_F, frames: 10, frame, x, y: y + 3, P, scale: scale * MATE_SCALE };
-  const mask = (name: string, tint: string) => (
-    <Sheet key={name} src={MATE_MASK[sheet]} {...at} row={MASK_ROW[name]} rows={MASK_ROWS} tint={tint} />
-  );
-  const extra: [string, string][] = [];
-  if (race === 'elvaan' && sex === 'm') extra.push(['elf_ink', INK], ['elf_ear', skin[1]]);
-  if (race === 'mithra') extra.push(['cat_ink', INK], ['tail', hair[2]], ['cat_ears', hair[1]]);
+  const [hx, hy, bx, by] = (RACE_FIT[race] || RACE_FIT.hume).map((v) => v * MATE_SCALE);
+  const neck = (NECK[sheet] || [])[frame] ?? 18;
+  const feet = y + 3 * by;                          // his frames have ~3 rows under the feet
+  const headBottom = feet - (MATE_F - neck) * by;
+  const layers: [any, number | null, string | undefined][] = [[MATE_SHEET[sheet], null, undefined]];
+  const mask = (name: string, tint: string) => layers.push([MATE_MASK[sheet], MASK_ROW[name], tint]);
+  if (race === 'mithra' || race === 'galka') {
+    mask('tail_ink', INK);
+    mask('tail', race === 'galka' ? skin[2] : hair[2]);
+  }
+  for (let i = 0; i < 4; i++) mask(`hair${i}`, hair[i]);
+  for (let i = 0; i < 4; i++) mask(`skin${i}`, skin[i]);
+  if (race === 'elvaan' && sex === 'm') { mask('elf_ink', INK); mask('elf_ear', skin[1]); }
+  if (race === 'mithra') { mask('cat_ink', INK); mask('cat_ears', hair[1]); }
   return (
     <>
-      <Sheet src={MATE_SHEET[sheet]} {...at} />
-      {[0, 1, 2, 3].map((i) => mask(`hair${i}`, hair[i]))}
-      {[0, 1, 2, 3].map((i) => mask(`skin${i}`, skin[i]))}
-      {extra.map(([n, t]) => mask(n, t))}
+      {layers.map(([src, row, tint], i) => (
+        <Slice key={'b' + i} src={src} frame={frame} row={row ?? 0} rows={row == null ? 1 : MASK_ROWS} y0={neck} y1={MATE_F}
+          sx={bx} sy={by} cx={x} bottom={feet} P={P} tint={tint} />
+      ))}
+      {layers.map(([src, row, tint], i) => (
+        <Slice key={'h' + i} src={src} frame={frame} row={row ?? 0} rows={row == null ? 1 : MASK_ROWS} y0={0} y1={neck}
+          sx={hx} sy={hy} cx={x} bottom={headBottom} P={P} tint={tint} />
+      ))}
     </>
   );
 }
