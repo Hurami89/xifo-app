@@ -48,8 +48,13 @@ def main():
     for sc in S.SCENES:
         p = S.paint(sc)
         bp, fp = os.path.join(OUT, 'bg', sc + '.png'), os.path.join(OUT, 'fg', sc + '.png')
-        save_png(up(p.img), bp, colors=64)
-        up(p.fg).save(fp, optimize=True)
+        painted = pack('bg', sc)      # Kaza's painting of the zone, pixelled by oldgame_pixel.py
+        if painted is not None:
+            save_png(up(painted.convert('RGB')), bp, colors=64)
+            up(Image.new('RGBA', (240, 126), (0, 0, 0, 0))).save(fp, optimize=True)
+        else:
+            save_png(up(p.img), bp, colors=64)
+            up(p.fg).save(fp, optimize=True)
         total += os.path.getsize(bp) + os.path.getsize(fp)
         lines.append(f"  {sc}: {{ bg: require('../../assets/ventures/bg/{sc}.png'), fg: require('../../assets/ventures/fg/{sc}.png') }},")
     lines.append('};')
@@ -78,6 +83,19 @@ def main():
         up(sheet).save(path, optimize=True)
         total += os.path.getsize(path)
         lines.append(f"  {look}: require('../../assets/ventures/m/{look}.png'),")
+    lines.append('};')
+    # Kaza's monsters (his own renders, pixelled by oldgame_pixel.py), one per camp monster by name, 40 x 40 a frame
+    mt = os.path.join(PACK, 'mt')
+    names = sorted(f[:-4] for f in os.listdir(mt) if f.endswith('.png')) if os.path.isdir(mt) else []
+    os.makedirs(os.path.join(OUT, 'mt'), exist_ok=True)
+    lines.append("// Kaza's monsters by camp-monster name (spaces etc. as _), 40 x 40 a frame, the same 4 frames.")
+    lines.append('export const MOBT_W = 40, MOBT_H = 40;')
+    lines.append('export const MOBT: Record<string, any> = {')
+    for name in names:
+        path = os.path.join(OUT, 'mt', name + '.png')
+        up(Image.open(os.path.join(mt, name + '.png')).convert('RGBA')).save(path, optimize=True)
+        total += os.path.getsize(path)
+        lines.append(f"  {name}: require('../../assets/ventures/mt/{name}.png'),")
     lines.append('};')
     # the party companions: Kaza's "Records of Vana'diel" sprites (his own art, with his permission), 32 x 32 a frame
     party = sorted(f[:-4] for f in os.listdir(os.path.join(PACK, 'party')) if f.endswith('.png')) \

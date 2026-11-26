@@ -4,7 +4,7 @@
 // Plain React Native views and images on a 240 x 126 grid, like the fishing scene, so it runs the same everywhere.
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
-import { FRAME, GROUND, MATES, MATE_H, MATE_W, MOB_H, MOB_W, MOBS, PARTY, PARTY_H, PARTY_W, SCENES, SCENE_H, SCENE_W } from './art';
+import { FRAME, GROUND, MATES, MATE_H, MATE_W, MOB_H, MOB_W, MOBS, MOBT, MOBT_H, MOBT_W, PARTY, PARTY_H, PARTY_W, SCENES, SCENE_H, SCENE_W } from './art';
 import type { Camp, Ev, PartyMember, VMate } from './api';
 import { F } from '../ui';
 
@@ -15,6 +15,15 @@ const CASTERS = new Set(['WHM', 'BLM', 'RDM', 'SMN', 'BRD', 'SCH', 'GEO']);
 const SPOTS: [number, number][] = [[104, 108], [84, 118], [70, 100], [52, 113], [36, 103], [20, 119]];
 const MOB_AT: [number, number] = [182, 112];
 const MOB_SCALE = 1.35;
+const MOBT_SCALE = 1.1;
+
+/** Kaza's pixelled monster for this camp monster by name, else the drawn look. */
+function mobArt(mob: { name: string; look: string }) {
+  const own = MOBT[mob.name.replace(/[^A-Za-z0-9]/g, '_')];
+  return own
+    ? { src: own, fw: MOBT_W, fh: MOBT_H, scale: MOBT_SCALE }
+    : { src: MOBS[mob.look] || MOBS.slime, fw: MOB_W, fh: MOB_H, scale: MOB_SCALE };
+}
 
 export type Phase = 'road' | 'fight' | 'rest' | 'home';
 export type Member = { kind: 'mate'; race: number; job: string } | { kind: 'party'; idx: number; job: string };
@@ -95,7 +104,7 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
           <Image source={scene.bg} style={st_.full} />
           {phase === 'fight' && mob ? (
             <>
-              <Sheet src={MOBS[mob.look] || MOBS.slime} fw={MOB_W} fh={MOB_H} frames={4} P={P} scale={MOB_SCALE}
+              <Sheet {...mobArt(mob)} frames={4} P={P}
                 frame={hitNow ? 3 : c % 9 === 4 ? 2 : tick % 4 < 2 ? 0 : 1} x={MOB_AT[0] + (hitNow ? 2 : 0)} y={MOB_AT[1]} />
               {hitNow ? (
                 <Text style={[st_.dmg, { left: (MOB_AT[0] - 8) * P, top: (MOB_AT[1] - 44 - (tick % 3)) * P, fontSize: 9 * P }]}>

@@ -41,3 +41,8 @@ yarn-error.*
 /android
 
 __pycache__/
+
+# Kaza's original old-game art (324 MB source; the pixelled results are in art/venture-pack)
+art/oldgame-src/
+art/oldgame-preview.png
+art/oldgame-app-preview.png
