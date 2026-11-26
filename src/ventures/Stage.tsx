@@ -8,6 +8,8 @@ import { FRAME, GROUND, MOB_H, MOB_W, MOBS, MOBT, MOBT_H, MOBT_W, PARTY, PARTY_H
 import { HAIR_TONES, MASK_ROW, MASK_ROWS, MATE_F, MATE_MASK, MATE_SHEET, NECK, RACE_FIT, RACE_LOOK, SKIN_TONES } from './mate_art';
 import type { Camp, Ev, PartyMember, VMate } from './api';
 import { F } from '../ui';
+import { LinearGradient } from 'expo-linear-gradient';
+import { timeOfDay, TimeOfDay, vanaNow } from '../fishing/vanatime';
 
 export const STAGE_RATIO = SCENE_W / SCENE_H;
 const JOBS = ['WAR', 'MNK', 'WHM', 'BLM', 'RDM', 'THF', 'PLD', 'DRK', 'BST', 'BRD', 'RNG', 'SAM', 'NIN', 'DRG', 'SMN', 'BLU', 'COR', 'PUP'];
@@ -15,6 +17,14 @@ const CASTERS = new Set(['WHM', 'BLM', 'RDM', 'SMN', 'BRD', 'SCH', 'GEO']);
 // feet positions (grid x centre, y), front of the party first
 const SPOTS: [number, number][] = [[104, 108], [84, 118], [70, 100], [52, 113], [36, 103], [20, 119]];
 const MOB_AT: [number, number] = [182, 112];
+// (2026-11-25) the light of the Vana'diel hour outdoors; caves, towers and halls keep their own light
+const INDOOR = new Set(['korroloka', 'gusgen', 'oztroja', 'ssg', 'crawlers', 'garlaige', 'gustav', 'onzozo', 'kuftal', 'krt', 'boyahda',
+  'ifrits', 'den', 'aydeewa']);
+const TINT: Record<TimeOfDay, [string, string] | null> = {
+  dawn: ['rgba(120,70,160,0.22)', 'rgba(255,150,90,0.18)'], day: null,
+  dusk: ['rgba(110,40,120,0.28)', 'rgba(255,110,60,0.22)'], night: ['rgba(6,10,40,0.38)', 'rgba(10,20,64,0.26)'],
+};
+const CAMPFIRE: [number, number] = [64, 116];
 const MOB_SCALE = 1.35;
 const MOBT_SCALE = 1.1;
 
@@ -94,6 +104,13 @@ function Mate({ m, frame, x, y, P }: { m: Extract<Member, { kind: 'mate' }>; fra
   );
 }
 
+/** A character drawn like a squad mate (Kaza's hero in its job, its own hair, skin and build), for other screens:
+ * the fishing scene's angler. job = the game's job number (1 WAR .. 18 PUP); x, y = the feet, in 240-wide grid pixels. */
+export function MateFigure({ race, face, job, frame, x, y, P }: { race: number; face: number; job: number; frame: number; x: number;
+  y: number; P: number }) {
+  return <Mate m={{ kind: 'mate', race, face, job: JOBS[job - 1] || 'WAR', weapon: 0 }} frame={frame} x={x} y={y} P={P} />;
+}
+
 export type Phase = 'road' | 'fight' | 'rest' | 'home';
 export type Member = { kind: 'mate'; race: number; job: string; face: number; weapon: number } | { kind: 'party'; idx: number; job: string };
 
@@ -154,7 +171,7 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (still) return;
-    const t = setInterval(() => setTick((n) => n + 1), 160);
+    const t = setInterval(() => setTick((n) => n + 1), 120);
     return () => clearInterval(t);
   }, [still]);
   const P = box / SCENE_W;
@@ -167,20 +184,46 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
   const members = membersOf(mates, party);
   const c = tick % 18;
   const hitNow = phase === 'fight' && members.some((_, i) => (c === (i * 3 + 1) % 18));
+  const hitAfter = phase === 'fight' && members.some((_, i) => (c === (i * 3 + 2) % 18));     // the frame after a hit
   const onLayout = (e: LayoutChangeEvent) => setBox(e.nativeEvent.layout.width);
+  const tod = (camp && INDOOR.has(camp.scene)) ? 'day' : timeOfDay(vanaNow().hour);
+  const tint = TINT[tod];
+  // a kill a moment ago: the fallen monster fades out (and the next one fades in) with the exp it gave
+  const since = st.last ? sec - st.last.t : 99;
+  const fallen = phase === 'fight' && st.last && since >= 0 && since < 2.5 && st.last !== st.fighting
+    ? ((st.last.c ? camps[st.last.c] : camp)?.mobs[st.last.m ?? 0] || null) : null;
+  const shake = hitNow ? ((tick * 7) % 3) - 1 : 0;
+  const dmg = 20 + ((tick * 37) % 140);
+  const crit = dmg > 140;
 
   return (
     <View style={st_.wrap} onLayout={onLayout}>
       {P > 0 && (
-        <>
+        <View style={[st_.full, { transform: [{ translateX: shake * P }, { translateY: (hitNow ? 1 : 0) * P }] }]}>
           <Image source={scene.bg} style={st_.full} />
           {phase === 'fight' && mob ? (
             <>
-              <Sheet {...mobArt(mob)} frames={4} P={P}
+              <View style={[st_.shadow, { left: (MOB_AT[0] - 16) * P, top: (MOB_AT[1] - 3) * P, width: 32 * P, height: 6 * P, borderRadius: 16 * P }]} />
+              {fallen ? (
+                <Sheet {...mobArt(fallen)} frames={4} P={P} frame={3} x={MOB_AT[0] + 4 + since * 3} y={MOB_AT[1]} o={Math.max(0, 1 - since / 1.2)} />
+              ) : null}
+              <Sheet {...mobArt(mob)} frames={4} P={P} o={fallen ? Math.min(1, Math.max(0, (since - 0.8) / 1.2)) : 1}
                 frame={hitNow ? 3 : c % 9 === 4 ? 2 : tick % 4 < 2 ? 0 : 1} x={MOB_AT[0] + (hitNow ? 2 : 0)} y={MOB_AT[1]} />
-              {hitNow ? (
-                <Text style={[st_.dmg, { left: (MOB_AT[0] - 8) * P, top: (MOB_AT[1] - 44 - (tick % 3)) * P, fontSize: 9 * P }]}>
-                  {String(20 + ((tick * 37) % 140))}
+              {hitNow ? [0, 1, 2, 3, 4, 5].map((k) => {                       // sparks where the blow lands
+                const a = (k / 6) * Math.PI * 2 + tick;
+                return <View key={'s' + k} style={[st_.px, { left: (MOB_AT[0] - 8 + Math.cos(a) * 12) * P, top: (MOB_AT[1] - 24 + Math.sin(a) * 9) * P,
+                  width: 3 * P, height: 3 * P, backgroundColor: k % 2 ? '#FFE680' : '#FFFFFF', borderColor: '#5A3000', borderWidth: P * 0.5 }]} />;
+              }) : null}
+              {hitNow || hitAfter ? (
+                <Text style={[st_.dmg, { left: (MOB_AT[0] - 8) * P, top: (MOB_AT[1] - 44 - (hitAfter ? 6 : 0)) * P, fontSize: (crit ? 11 : 9) * P,
+                  color: crit ? '#FFE060' : '#FFFFFF', opacity: hitAfter ? 0.55 : 1 }]}>
+                  {String(dmg)}
+                </Text>
+              ) : null}
+              {fallen ? (
+                <Text style={[st_.dmg, { left: (MOB_AT[0] - 18) * P, top: (MOB_AT[1] - 50 - since * 8) * P, fontSize: 8 * P, color: '#9EF0FF',
+                  opacity: Math.max(0, 1 - since / 2.5) }]}>
+                  {st.last?.x ? `+${st.last.x} EXP` : 'Defeated!'}
                 </Text>
               ) : null}
             </>
@@ -204,12 +247,43 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
                 else if (k === 1) frame = CASTERS.has(m.job) ? FRAME.cast : FRAME.atk1;
                 if (k === 1 && !CASTERS.has(m.job)) x += 6;
               }
-              if (m.kind === 'mate') {
-                return <Mate key={i} m={m} frame={frame} x={x} y={spot[1]} P={P} />;
+              const casting = frame === FRAME.cast;
+              const fx: React.ReactNode[] = [
+                <View key={'sh' + i} style={[st_.shadow, { left: (x - 9) * P, top: (spot[1] - 2) * P, width: 18 * P, height: 4 * P, borderRadius: 9 * P }]} />,
+              ];
+              if (casting) {                                           // a glow at the caster's feet, motes rising
+                fx.push(<View key={'g' + i} style={[st_.glow, { left: (x - 12) * P, top: (spot[1] - 4) * P, width: 24 * P, height: 7 * P, borderRadius: 12 * P }]} />);
+                [0, 1, 2].forEach((k) => fx.push(<View key={'m' + i + k} style={[st_.px, { left: (x - 6 + k * 6) * P,
+                  top: (spot[1] - 10 - ((tick * 3 + k * 5) % 22)) * P, width: P * 1.5, height: P * 1.5, backgroundColor: k === 1 ? '#C8F4FF' : '#FFFFFF' }]} />));
               }
-              return <Sheet key={i} src={PARTY[m.idx] || PARTY[0]} fw={PARTY_W} fh={PARTY_H} frames={10} frame={frame} x={x} y={spot[1]} P={P} />;
+              if (phase === 'road') {                                  // dust behind the feet
+                [0, 1].forEach((k) => fx.push(<View key={'d' + i + k} style={[st_.px, { left: (x - 8 - k * 4 - ((tick + i) % 3)) * P,
+                  top: (spot[1] - 2 - k) * P, width: (2 + k) * P, height: (2 + k) * P, backgroundColor: 'rgba(214,196,160,0.55)' }]} />));
+              }
+              const body = m.kind === 'mate' ? <Mate key={i} m={m} frame={frame} x={x} y={spot[1]} P={P} />
+                : <Sheet key={i} src={PARTY[m.idx] || PARTY[0]} fw={PARTY_W} fh={PARTY_H} frames={10} frame={frame} x={x} y={spot[1]} P={P} />;
+              return <React.Fragment key={'f' + i}>{fx}{body}</React.Fragment>;
             })}
           <Image source={scene.fg} style={st_.full} />
+          {phase === 'rest' ? (                                         // the campfire
+            <>
+              <View style={[st_.glow, { left: (CAMPFIRE[0] - 22) * P, top: (CAMPFIRE[1] - 10) * P, width: 44 * P, height: 16 * P, borderRadius: 22 * P,
+                backgroundColor: 'rgba(255,150,60,0.22)' }]} />
+              <View style={[st_.px, { left: (CAMPFIRE[0] - 6) * P, top: (CAMPFIRE[1] - 2) * P, width: 12 * P, height: 2 * P, backgroundColor: '#6A3A1C' }]} />
+              {[[-3, '#FF7020', 7], [0, '#FFB030', 9 + (tick % 3)], [3, '#FF7020', 6 + ((tick + 1) % 2)], [0, '#FFF0A0', 4 + (tick % 2)]].map(([dx, col, hgt], k) => (
+                <View key={'fl' + k} style={[st_.px, { left: (CAMPFIRE[0] - 1.5 + (dx as number)) * P, top: (CAMPFIRE[1] - 2 - (hgt as number)) * P,
+                  width: 3 * P, height: (hgt as number) * P, backgroundColor: col as string }]} />
+              ))}
+              <View style={[st_.px, { left: (CAMPFIRE[0] - 1 + ((tick % 4) - 2)) * P, top: (CAMPFIRE[1] - 16 - (tick % 8)) * P, width: P, height: P, backgroundColor: '#FFD080' }]} />
+            </>
+          ) : null}
+          {phase === 'home' ? [0, 1, 2, 3, 4, 5, 6, 7].map((k) => {        // the homecoming: sparkles over the party
+            const x = 20 + ((k * 53 + tick * 3) % 120);
+            const y = 30 + ((k * 29 + tick * 5) % 60);
+            return (tick + k) % 3 ? <View key={'h' + k} style={[st_.px, { left: x * P, top: y * P, width: 2 * P, height: 2 * P,
+              backgroundColor: k % 2 ? '#FFE680' : '#FFFFFF' }]} /> : null;
+          }) : null}
+          {tint ? <LinearGradient pointerEvents="none" colors={tint} style={st_.full} /> : null}
           {phase === 'rest' ? (
             <Text style={[st_.zz, { left: 72 * P, top: (70 - (tick % 6)) * P, fontSize: 9 * P }]}>{tick % 12 < 6 ? 'Z z' : 'z Z'}</Text>
           ) : null}
@@ -228,7 +302,7 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
               <Text style={[st_.hudText, { fontSize: 7 * P }]}>{label}</Text>
             </View>
           ) : null}
-        </>
+        </View>
       )}
     </View>
   );
@@ -244,4 +318,7 @@ const st_ = StyleSheet.create({
   hudText: { color: '#F4E6B8', fontFamily: F.bold },
   hpBack: { backgroundColor: '#202838', borderRadius: 1, overflow: 'hidden' },
   hp: { height: '100%' },
+  px: { position: 'absolute' },
+  shadow: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.25)' },
+  glow: { position: 'absolute', backgroundColor: 'rgba(170,230,255,0.35)' },
 });

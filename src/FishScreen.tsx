@@ -1,14 +1,17 @@
-// FISH: portable fishing. Pick one of your characters, a real fishing spot, a rod and bait, cast, and fight the fish
-// with the arrows. Catches, skill-ups and gil spent are sent to xiforever.com and arrive with the character at the
+// FISH: portable fishing. Pick one of your characters, a real fishing spot, a rod and bait from the character's own
+// gear, and it fishes by itself, like a fishbot (2026-11-25, the user: "take out the minigame ... it still takes a bit
+// to catch a fish, comparable to in game, ... fish up a little less than in game"): see AUTO in fishing/engine.ts.
+// While the app is closed the time is fished out when it opens again (at most CATCHUP_HOURS, while the bait lasts,
+// and never past the game's daily DAILY_CATCHES). Catches, skill-ups and gil spent are sent to xiforever.com and arrive with the character at the
 // launcher's next PLAY (delivery box, fishing skill, gil). Rules and data: src/fishing/engine.ts, src/fishData.json.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Image, Pressable, ScrollView, StyleSheet, Vibration, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ART, Btn, C, F, Pane, Pic, Strip, T, Win } from './ui';
 import { faceOf } from './faces';
-import { Card, cachedMe, me, newId, Pending, Report, sendReport } from './armory';
-import { PairBox } from './MeScreen';
-import { getJSON, setJSON } from './store';
+import { Card, cachedMe, me, newId, Pending, Report, sendReport, siteUrl } from './armory';
+import { ItemIcon, PairBox } from './MeScreen';
+import { getJSON, LINKS, setJSON } from './store';
 import * as E from './fishing/engine';
 import Scene, { Phase, SCENE_RATIO } from './fishing/Scene';
 import { TH } from './theme';
@@ -26,13 +29,16 @@ type Save = {
   log: Record<string, { count: number; best: number }>;
   zone: number | null; spot: number | null; rod: number | null; baitPick: string | null;
   total: number;
+  auto: { on: boolean; at: number } | null;          // the auto-fisher: on, and when it last fished (for the catch-up)
+  daily: { day: string; count: number };            // catches today (the game's fishing fatigue)
 };
 const fresh = (): Save => ({ starter: false, bait: {}, ownedUsed: {}, skillHigh: 0, unsent: { catches: {}, skill: 0, gil: 0, gilFound: 0 },
-  outbox: null, log: {}, zone: null, spot: null, rod: null, baitPick: null, total: 0 });
+  outbox: null, log: {}, zone: null, spot: null, rod: null, baitPick: null, total: 0, auto: null, daily: { day: '', count: 0 } });
 
 type Line = { id: number; text: string; kind?: 'good' | 'bad' | 'skill' | 'info' };
-type Fight = { fish: E.Fish; critical: boolean; p: ReturnType<typeof E.fightParams>; stamina: number; left: number;
-  arrow: null | { dir: 'L' | 'R'; until: number; gold: boolean }; next: number; result?: string };
+// what the scene shows of the auto-fisher's fight (the result is already known; this only plays it out)
+type Show = { fish: E.Fish; stamina: number; arrow: 'L' | 'R' | null; started: number; seconds: number; won: boolean };
+type Status = { text: string; fish?: string };
 
 export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHint: Card[] | null; goMe: () => void; active?: boolean }) {
   useMusic('fishing', active);   // (2026-11-25) the fishing music while this tab shows
@@ -45,8 +51,13 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
   const [view, setView] = useState<'spot' | 'where' | 'shop' | 'log'>('where');
   const [region, setRegion] = useState<string | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
-  const [busy, setBusy] = useState<'cast' | 'fight' | null>(null);
-  const [fight, setFight] = useState<Fight | null>(null);
+  const [auto, setAuto] = useState(false);
+  const [show, setShow] = useState<Show | null>(null);
+  const [status, setStatus] = useState<Status>({ text: '' });
+  const [session, setSession] = useState({ casts: 0, caught: 0 });
+  const [pick, setPick] = useState<'rod' | 'bait' | null>(null);
+  const [base, setBase] = useState(LINKS.website);
+  const [resume, setResume] = useState(0);
   const [sending, setSending] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
   const [hitTick, setHitTick] = useState(0);
@@ -56,10 +67,14 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
   const saveRef = useRef(save);
   saveRef.current = save;
   const lineId = useRef(0);
-  const fightRef = useRef<Fight | null>(null);
+  const autoRef = useRef(false);
+  const timers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const fightTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const checked = useRef<Record<string, boolean>>({});
   const sendTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { if (cardsHint) setCards(cardsHint); }, [cardsHint]);
+  useEffect(() => { siteUrl().then(setBase).catch(() => {}); }, []);
   useEffect(() => {
     (async () => {
       const cached = await cachedMe();
@@ -105,7 +120,8 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
     + save.unsent.skill + (save.outbox?.skill || 0), save.skillHigh)) : 0;
   const gil = card ? Math.max(0, card.gil - pendingFor.reduce((n, p) => n + p.gil, 0) - save.unsent.gil - (save.outbox?.gil || 0)) : 0;
   const rods = useMemo(() => E.rodsFor((card?.fishing.rods || []).map((r) => r.id)), [card]);
-  const rod = rods.find((r) => r.id === save.rod) || rods[0];
+  const equipped = (slot: number) => card?.equip.find((e) => e.slot === slot)?.id;      // the game's Range / Ammo slots
+  const rod = rods.find((r) => r.id === save.rod) || rods.find((r) => r.id === equipped(2)) || rods[0];
   const baitList = useMemo(() => {
     const out: { key: string; bait: E.Bait; qty: number; own: boolean }[] = [];
     Object.entries(save.bait).forEach(([id, q]) => { const b = E.BAIT[id]; if (b && q > 0) out.push({ key: 'p' + id, bait: b, qty: q, own: false }); });
@@ -116,7 +132,8 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
     });
     return out;
   }, [save, card]);
-  const baitSel = baitList.find((b) => b.key === save.baitPick) || baitList[0] || null;
+  const baitSel = baitList.find((b) => b.key === save.baitPick) || baitList.find((b) => b.own && b.bait.id === equipped(3))
+    || baitList[0] || null;
   const zone = E.ZONES.find((z) => z.id === save.zone) || null;
   const spot = zone?.spots.find((s) => s.id === save.spot) || zone?.spots[0] || null;
 
@@ -161,102 +178,149 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
     return () => { sub.remove(); clearInterval(t); };
   }, [flush]);
 
-  // ------------------------------------------------------------------ casting
-  const cast = () => {
-    if (!spot || !rod || !baitSel || busy) return;
-    setBusy('cast');
+  // ------------------------------------------------------------------ the auto-fisher
+  // What the loop needs, as it is now (the loop runs in timers across renders).
+  const live = useRef({ spot, rod, bait: baitSel, skill, rank, cap, city: !!zone?.city, rate: card?.fishing.rate ?? 1 });
+  live.current = { spot, rod, bait: baitSel, skill, rank, cap, city: !!zone?.city, rate: card?.fishing.rate ?? 1 };
+  const later = (fn: () => void, ms: number) => {
+    const t = setTimeout(() => { timers.current.delete(t); fn(); }, ms);
+    timers.current.add(t);
+  };
+  const quiet = () => {
+    timers.current.forEach(clearTimeout);
+    timers.current.clear();
+    if (fightTimer.current) clearInterval(fightTimer.current);
+    fightTimer.current = null;
+  };
+  useEffect(() => quiet, []);                       // leaving the screen stops the timers (save.auto stays on: catch-up)
+
+  const startAuto = () => {
+    if (!spot || !rod || !baitSel || autoRef.current) return;
+    autoRef.current = true;
+    setAuto(true);
+    setSession({ casts: 0, caught: 0 });
+    update((d) => { d.auto = { on: true, at: Date.now() }; });
+    say(`${who} starts fishing (${baitSel.bait.name}, ${rod.name}).`, 'info');
+    castOnce();
+  };
+  const stopAuto = (why?: string) => {
+    autoRef.current = false;
+    setAuto(false);
+    quiet();
+    setShow(null);
+    setLandedFish(null);
+    setPhase('idle');
+    setStatus({ text: '' });
+    update((d) => { d.auto = null; });
+    if (why) say(why, 'info');
+    flush();
+  };
+
+  const castOnce = () => {
+    if (!autoRef.current) return;
+    const L = live.current;
+    if (!L.spot || !L.rod) return stopAuto('Pick a fishing spot first.');
+    if (!L.bait) return stopAuto('Out of bait: fishing stops. Visit the Tackle Shop or pick other bait.');
+    const today = E.dayKey();
+    const s = saveRef.current;
+    if ((s.daily.day === today ? s.daily.count : 0) >= E.DAILY_CATCHES) {
+      return stopAuto(`${who} is worn out from fishing today (${E.DAILY_CATCHES} catches). Rest until tomorrow.`);
+    }
+    const r = E.autoCast(L.spot, L.bait.bait, Math.floor(L.skill / 10), L.rod);
+    const wait = E.waitSeconds();
+    update((d) => { if (d.auto) d.auto.at = Date.now(); });
+    setSession((x) => ({ ...x, casts: x.casts + 1 }));
     setPhase('cast');
-    setTimeout(() => setPhase((ph) => (ph === 'cast' ? 'wait' : ph)), 800);
-    say(`You cast your line (${baitSel.bait.name}).`);
-    sfx('cast');
-    const wait = E.rand(2.5, 7.5) * 1000;
-    setTimeout(() => {
-      const { fish, critical } = E.rollHook(spot, baitSel.bait, Math.floor(skill / 10), rod);
-      if (!fish) {
+    setStatus({ text: 'Casting...' });
+    sfx('cast', 0.6);
+    later(() => { setPhase('wait'); setStatus({ text: 'Waiting for a bite...' }); }, 800);
+    later(() => {
+      if (r.kind === 'nothing') {
         say("You didn't catch anything.", 'bad');
-        sfx('lost', 0.5);
         setPhase('lost');
-        setTimeout(() => { setPhase('idle'); setBusy(null); }, 900);
+        setStatus({ text: 'Nothing bit. Casting again...' });
+        later(() => { setPhase('idle'); next(); }, 1500);
         return;
       }
       useBait();
-      Vibration.vibrate(critical ? [0, 60, 60, 60] : 80);
-      sfx(critical ? 'gold' : 'bite');
-      say(critical ? 'Your keen senses tell you: this one is hooked fast!' : fish.item ? 'Something heavy and lifeless pulls at your line...'
-        : fish.large ? 'Something clamps onto your line ferociously!' : 'Something caught the hook!', critical ? 'good' : undefined);
-      const p = E.fightParams(fish, rod, Math.floor(skill / 10), critical);
+      const crit = r.kind === 'caught' && r.critical;
+      Vibration.vibrate(crit ? [0, 60, 60, 60] : 60);
+      sfx(crit ? 'gold' : 'bite', 0.7);
+      say(crit ? 'Your keen senses tell you: this one is hooked fast!' : r.fish.item ? 'Something heavy and lifeless pulls at your line...'
+        : r.fish.large ? 'Something clamps onto your line ferociously!' : 'Something caught the hook!', crit ? 'good' : undefined);
+      setCritBite(crit);
       setPhase('bite');
-      setCritBite(critical);
-      setTimeout(() => {
-        fightRef.current = { fish, critical, p, stamina: 100, left: p.seconds, arrow: null, next: Date.now() + p.every * 1000 };
-        setFight(fightRef.current);
-        setPhase('fight');
-        setBusy('fight');
-      }, 900);
-    }, wait);
+      setStatus({ text: 'Something bit!' });
+      later(() => playFight(r), 900);
+    }, (E.CAST_SECONDS + wait) * 1000);
+  };
+  const next = () => later(castOnce, 700);
+
+  /** Plays out a fight whose end is already known: the arrows, the reel, the fish tiring (or not). */
+  const playFight = (r: Exclude<E.AutoResult, { kind: 'nothing' }>) => {
+    const L = live.current;
+    const pulls = r.kind === 'caught' || r.tired;                 // the fish tires (a too-big one still gets off at the end)
+    const p = E.fightParams(r.fish, L.rod!, Math.floor(L.skill / 10), r.kind === 'caught' && r.critical);
+    const started = Date.now();
+    let arrowAt = started + p.every * 1000;
+    let answerAt = 0;
+    let dir: 'L' | 'R' | null = null;
+    setPhase('fight');
+    setStatus({ text: 'Fighting...', fish: r.fish.item ? 'something heavy' : 'a fish' });
+    fightTimer.current = setInterval(() => {
+      const now = Date.now();
+      const t = (now - started) / 1000;
+      const u = Math.min(1, t / r.seconds);
+      const stamina = pulls ? Math.max(0, 100 * (1 - u) + 8 * Math.sin(t * 2.3) * (1 - u))
+        : Math.max(25, 100 - 55 * Math.sin(Math.min(1, u * 1.4) * Math.PI / 2) + 10 * Math.sin(t * 1.7));
+      if (!dir && now >= arrowAt) { dir = Math.random() < 0.5 ? 'L' : 'R'; answerAt = now + E.rand(E.AUTO_REACT[0], E.AUTO_REACT[1]) * 1000; }
+      if (dir && now >= answerAt) {
+        if (Math.random() < E.AUTO_ACCURACY) { setHitTick((n) => n + 1); sfx('reel', 0.25); } else setMissTick((n) => n + 1);
+        dir = null;
+        arrowAt = now + p.every * 1000;
+      }
+      setShow({ fish: r.fish, stamina, arrow: dir, started, seconds: r.seconds, won: pulls });
+      if (t >= r.seconds) {
+        if (fightTimer.current) clearInterval(fightTimer.current);
+        fightTimer.current = null;
+        finish(r);
+      }
+    }, 100);
+  };
+
+  const finish = (r: Exclude<E.AutoResult, { kind: 'nothing' }>) => {
+    setShow(null);
+    if (r.kind === 'lost') {
+      say(`You lost your catch: ${r.why}.`, 'bad');
+      sfx('lost', 0.6);
+      setPhase('lost');
+      setStatus({ text: 'It got away. Casting again...' });
+      later(() => { setPhase('idle'); next(); }, 1500);
+      return;
+    }
+    const size = landed(r.fish);
+    setLandedFish({ id: r.fish.id, name: r.fish.id === E.GIL_ITEM ? 'Gil!' : r.fish.name, size, item: r.fish.item, large: r.fish.large });
+    setSession((x) => ({ ...x, caught: x.caught + 1 }));
+    setPhase('caught');
+    setStatus({ text: 'Caught!' });
+    sfx('catch', 0.7);
+    later(() => { setLandedFish(null); setPhase('idle'); next(); }, E.AFTER_SECONDS * 1000 + 600);
   };
 
   const useBait = () => {
-    if (!baitSel || baitSel.bait.lure) return;
-    const id = String(baitSel.bait.id);
+    const b = live.current.bait;
+    if (!b || b.bait.lure) return;
+    const id = String(b.bait.id);
     update((d) => {
-      if (baitSel.own) d.ownedUsed[id] = (d.ownedUsed[id] || 0) + 1;
+      if (b.own) d.ownedUsed[id] = (d.ownedUsed[id] || 0) + 1;
       else d.bait[id] = Math.max(0, (d.bait[id] || 0) - 1);
     });
   };
 
-  // the fight's clock. The live fight is fightRef (the clock and the taps both change it); `fight` is only what is drawn.
-  useEffect(() => {
-    if (busy !== 'fight') return;
-    const tick = setInterval(() => {
-      const f = fightRef.current;
-      if (!f || f.result) return;
-      const now = Date.now();
-      const dt = 0.05;
-      let { stamina, arrow, next } = f;
-      if (arrow && now > arrow.until) { stamina = Math.min(100, stamina + f.p.heal); arrow = null; }
-      if (!arrow && now >= next) {
-        arrow = { dir: Math.random() < 0.5 ? 'L' : 'R', until: now + f.p.window * 1000, gold: f.critical };
-        if (f.critical) sfx('gold', 0.4);
-        next = now + f.p.every * 1000 + f.p.window * 500;
-      }
-      stamina = Math.min(100, stamina + f.p.pull * dt);
-      const left = f.left - dt;
-      if (left <= 0) return end({ ...f, left: 0, stamina, arrow: null }, false);
-      fightRef.current = { ...f, stamina, arrow, next, left };
-      setFight(fightRef.current);
-    }, 50);
-    return () => clearInterval(tick);
-  }, [busy]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const tap = (dir: 'L' | 'R') => {
-    const f = fightRef.current;
-    if (!f || f.result) return;
-    let stamina = f.stamina;
-    if (f.arrow && f.arrow.dir === dir) { stamina -= f.p.hit; setHitTick((n) => n + 1); sfx('hit', 0.6); sfx('reel', 0.4); }
-    else { stamina = Math.min(100, stamina + f.p.heal * 0.6); setMissTick((n) => n + 1); sfx('miss', 0.6); }
-    const nf = { ...f, stamina, arrow: null };
-    if (stamina <= 0) return end(nf, true);
-    fightRef.current = nf;
-    setFight(nf);
-  };
-
-  const end = (f: Fight, won: boolean) => {
-    fightRef.current = { ...f, result: 'done' };
-    setFight(null);
-    const finish = (ms: number) => setTimeout(() => { fightRef.current = null; setPhase('idle'); setBusy(null); setLandedFish(null); }, ms);
-    if (!won) { say(f.fish.item ? 'Whatever it was sank back into the water.' : 'You lost your catch.', 'bad'); sfx('lost'); setPhase('lost'); finish(900); return; }
-    const [lose, why] = E.loseChance(f.fish, Math.floor(skill / 10), rod!);
-    if (Math.random() * 100 < lose) { say(`You lost your catch: ${why}.`, 'bad'); sfx('lost'); setPhase('lost'); finish(900); return; }
-    const size = landed(f.fish);
-    setLandedFish({ id: f.fish.id, name: f.fish.id === E.GIL_ITEM ? 'Gil!' : f.fish.name, size, item: f.fish.item, large: f.fish.large });
-    setPhase('caught');
-    sfx('catch');
-    finish(2200);
-  };
-
   const landed = (fish: E.Fish): number => {
+    const L = live.current;
     const size = E.sizeOf(fish);
+    const today = E.dayKey();
     if (fish.id === E.GIL_ITEM) {
       const g = E.randInt(10, 120);
       say(`You fished up ${g} gil!`, 'good');
@@ -268,19 +332,112 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
         const l = d.log[String(fish.id)] || { count: 0, best: 0 };
         d.log[String(fish.id)] = { count: l.count + 1, best: Math.max(l.best, size) };
         d.total += 1;
+        d.daily = { day: today, count: (d.daily.day === today ? d.daily.count : 0) + 1 };
       });
     }
-    const gain = Math.min(E.skillUp(fish.skill, skill, rank, !!zone?.city, card?.fishing.rate ?? 1), cap - skill);
+    const gain = Math.min(E.skillUp(fish.skill, L.skill, L.rank, L.city, L.rate), L.cap - L.skill);
     if (gain > 0) {
-      const now = skill + gain;
+      const now = L.skill + gain;
       setTimeout(() => sfx('skill'), 900);
-      say(`Your fishing skill rises ${(gain / 10).toFixed(1)} points.${Math.floor(now / 10) > Math.floor(skill / 10) ? ` Fishing skill reaches level ${Math.floor(now / 10)}!` : ''}`, 'skill');
+      say(`Your fishing skill rises ${(gain / 10).toFixed(1)} points.${Math.floor(now / 10) > Math.floor(L.skill / 10) ? ` Fishing skill reaches level ${Math.floor(now / 10)}!` : ''}`, 'skill');
       update((d) => { d.unsent.skill += gain; d.skillHigh = Math.max(d.skillHigh, now); });
-    } else if (skill >= cap && fish.skill > Math.floor(skill / 10)) {
-      say(`Your skill is capped at ${cap / 10} by your guild rank (${RANKS[rank]}). Rank up at the Fishermen's Guild in game to go higher.`, 'info');
+    } else if (L.skill >= L.cap && fish.skill > Math.floor(L.skill / 10)) {
+      say(`Your skill is capped at ${L.cap / 10} by your guild rank (${RANKS[L.rank]}). Rank up at the Fishermen's Guild in game to go higher.`, 'info');
     }
     soon();
     return size;
+  };
+
+  // ------------------------------------------------------------------ while the app was closed
+  // The auto-fisher was on when the app closed (or the phone slept): the time since is fished out now, cast by cast
+  // with the same rules, as long as the bait lasts, up to CATCHUP_HOURS and the daily limit. Then it carries on.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') setResume((n) => n + 1); });
+    return () => sub.remove();
+  }, []);
+  useEffect(() => {
+    if (!who || !card || !spot || !rod) return;
+    const s = saveRef.current;
+    if (!s.auto?.on) return;
+    const away = (Date.now() - s.auto.at) / 1000;
+    if (away < 60) {
+      if (!autoRef.current && view === 'spot' && !checked.current[who]) { checked.current[who] = true; resumeLive(); }
+      return;
+    }
+    checked.current[who] = true;
+    quiet();
+    catchUp(Math.min(away, E.CATCHUP_HOURS * 3600));
+  }, [who, card, spot, rod, resume]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const resumeLive = () => {
+    if (!live.current.bait) return;
+    autoRef.current = true;
+    setAuto(true);
+    setSession({ casts: 0, caught: 0 });
+    later(castOnce, 1200);
+  };
+
+  const catchUp = (seconds: number) => {
+    const L = live.current;
+    if (!L.spot || !L.rod) return;
+    const b = L.bait;
+    const today = E.dayKey();
+    const s0 = saveRef.current;
+    let done = s0.daily.day === today ? s0.daily.count : 0;
+    let skillT = L.skill;
+    let left = b ? (b.bait.lure ? Infinity : b.qty) : 0;
+    let t = 0;
+    let casts = 0;
+    let used = 0;
+    let gained = 0;
+    let gil = 0;
+    let why = '';
+    const got: Record<string, { n: number; best: number }> = {};
+    while (t < seconds) {
+      if (!b || left <= 0) { why = 'the bait ran out'; break; }
+      if (done >= E.DAILY_CATCHES) { why = `${who} got worn out (${E.DAILY_CATCHES} catches today)`; break; }
+      const r = E.autoCast(L.spot, b.bait, Math.floor(skillT / 10), L.rod);
+      t += E.castSeconds(r);
+      if (t > seconds) break;
+      casts++;
+      if (r.kind === 'nothing') continue;
+      if (!b.bait.lure) { left--; used++; }
+      if (r.kind !== 'caught') continue;
+      done++;
+      if (r.fish.id === E.GIL_ITEM) { gil += E.randInt(10, 120); continue; }
+      const size = E.sizeOf(r.fish);
+      const g = got[String(r.fish.id)] || { n: 0, best: 0 };
+      got[String(r.fish.id)] = { n: g.n + 1, best: Math.max(g.best, size) };
+      const up = Math.min(E.skillUp(r.fish.skill, skillT, L.rank, L.city, L.rate), L.cap - skillT);
+      if (up > 0) { skillT += up; gained += up; }
+    }
+    const caught = Object.values(got).reduce((n, g) => n + g.n, 0);
+    update((d) => {
+      Object.entries(got).forEach(([id, g]) => {
+        d.unsent.catches[id] = (d.unsent.catches[id] || 0) + g.n;
+        const l = d.log[id] || { count: 0, best: 0 };
+        d.log[id] = { count: l.count + g.n, best: Math.max(l.best, g.best) };
+      });
+      d.total += caught + (gil ? 1 : 0);
+      d.unsent.gilFound += gil;
+      d.unsent.skill += gained;
+      d.skillHigh = Math.max(d.skillHigh, skillT);
+      d.daily = { day: today, count: done };
+      if (b && used) {
+        const id = String(b.bait.id);
+        if (b.own) d.ownedUsed[id] = (d.ownedUsed[id] || 0) + used;
+        else d.bait[id] = Math.max(0, (d.bait[id] || 0) - used);
+      }
+      d.auto = why ? null : { on: true, at: Date.now() };
+    });
+    const mins = Math.round(seconds / 60);
+    const list = Object.entries(got).sort((a, b) => b[1].n - a[1].n).map(([id, g]) => `${g.n} ${E.FISH[id]?.name || '?'}`).join(', ');
+    say(`While you were away (${mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`}), ${who} cast ${casts} times`
+      + ` and caught ${caught}${list ? `: ${list}` : ''}${gil ? `, plus ${gil} gil` : ''}.`, caught ? 'good' : 'info');
+    if (gained) say(`Fishing skill rose ${(gained / 10).toFixed(1)} points while you were away.`, 'skill');
+    if (why) { say(`Fishing stopped: ${why}.`, 'info'); autoRef.current = false; setAuto(false); }
+    else if (view === 'spot') resumeLive();
+    soon();
   };
 
   // ------------------------------------------------------------------ screens
@@ -303,7 +460,8 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
     <View style={st.head}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
         {cards.map((c) => (
-          <Pressable key={c.name} onPress={() => !busy && setWho(c.name)} style={[st.chip, c.name === who && st.chipOn]}>
+          <Pressable key={c.name} onPress={() => { if (c.name !== who) { if (autoRef.current) stopAuto(); setWho(c.name); } }}
+            style={[st.chip, c.name === who && st.chipOn]}>
             <Image source={faceOf(c.race, c.face)} style={st.chipFace} />
             <T style={[st.chipName, c.name === who && { color: C.chipOnText }]}>{c.name}</T>
           </Pressable>
@@ -419,45 +577,74 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
   }
 
   // ------------------------------------------------------------------ at the water
+  const today = save.daily.day === E.dayKey() ? save.daily.count : 0;
+  const leave = (to: 'where' | 'shop' | 'log') => { if (autoRef.current) stopAuto(); flush(); setView(to); };
+  const rodOwned = (card.fishing.rods || []).length > 0;
   return (
-    <ScrollView contentContainerStyle={st.wrap} scrollEnabled={!fight}>
+    <ScrollView contentContainerStyle={st.wrap}>
       {head}
       <Win title={`${zone?.name || ''} - ${spot?.name || ''}`} icon={ART.buddy.phone} bodyStyle={{ padding: 0 }}>
         <View>
           <View style={{ width: '100%', aspectRatio: SCENE_RATIO, overflow: 'hidden', backgroundColor: '#0A1A2C' }} />
-          <Scene phase={phase} arrow={fight?.arrow?.dir || null} hitTick={hitTick} missTick={missTick} stamina={fight?.stamina ?? 100}
-            critical={critBite} large={fight?.fish.large ?? landedFish?.large} zoneId={zone?.id} fishId={fight?.fish.id ?? landedFish?.id}
-            catchName={landedFish?.name} catchSize={landedFish?.size} isItem={landedFish?.item} />
+          <Scene phase={phase} arrow={show?.arrow || null} hitTick={hitTick} missTick={missTick} stamina={show?.stamina ?? 100}
+            critical={critBite} large={show?.fish.large ?? landedFish?.large} zoneId={zone?.id} fishId={show?.fish.id ?? landedFish?.id}
+            catchName={landedFish?.name} catchSize={landedFish?.size} isItem={landedFish?.item}
+            fisher={{ race: card.race, face: card.face, job: card.mjob }} />
           <LinearGradient colors={['rgba(0,10,40,0.6)', 'rgba(0,10,40,0.0)']} style={st.sceneShade} pointerEvents="none">
             <T style={st.sceneTitle}>{spot?.name}</T>
             <T style={st.sceneSub}>{zone?.name}{zone?.city ? ' · town' : ''}</T>
           </LinearGradient>
         </View>
-        {fight ? (
-          <FightPanel f={fight} tap={tap} giveUp={() => end(fight, false)} />
-        ) : (
-          <View style={{ padding: 8 }}>
-            <T style={st.label}>Rod</T>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
-              {rods.map((r) => (
-                <Btn key={r.id} small active={r.id === rod?.id} label={r.name + ((card.fishing.rods || []).length ? '' : ' (loaned)')}
-                  onPress={() => !busy && update((d) => { d.rod = r.id; })} />
-              ))}
-            </ScrollView>
-            <T style={[st.label, { marginTop: 6 }]}>Bait</T>
-            {baitList.length ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
-                {baitList.map((b) => (
-                  <Btn key={b.key} small active={b.key === baitSel?.key} label={`${b.bait.name}${b.bait.lure ? '' : ` x${b.qty}`}${b.own ? ' (bag)' : ''}`}
-                    onPress={() => !busy && update((d) => { d.baitPick = b.key; })} />
-                ))}
-              </ScrollView>
-            ) : <T style={st.rowSub}>No bait left. Visit the Tackle Shop.</T>}
-            <View style={{ alignItems: 'center', marginTop: 10 }}>
-              <Btn primary label={busy === 'cast' ? 'Waiting for a bite...' : busy ? '...' : 'Cast'} onPress={cast} disabled={!!busy || !baitSel} style={{ minWidth: 200 }} />
+        <View style={{ padding: 8 }}>
+          <Pane>
+            <Strip title="Fishing gear" />
+            <View style={st.gear}>
+              <GearSlot label="Range" id={rod?.id} base={base} name={rod ? rod.name + (rodOwned ? '' : ' (loaned)') : '-'}
+                open={pick === 'rod'} locked={auto} onPress={() => setPick(pick === 'rod' ? null : 'rod')} />
+              <GearSlot label="Ammo" id={baitSel?.bait.id} base={base} locked={auto} open={pick === 'bait'}
+                name={baitSel ? baitSel.bait.name : 'No bait'} sub={baitSel ? (baitSel.bait.lure ? 'lure' : `x${baitSel.qty}${baitSel.own ? '' : ' (phone)'}`) : 'Tackle Shop'}
+                onPress={() => setPick(pick === 'bait' ? null : 'bait')} />
             </View>
+            {pick === 'rod' && !auto ? (
+              <View style={st.pickList}>
+                {rods.map((r) => (
+                  <Pressable key={r.id} onPress={() => { update((d) => { d.rod = r.id; }); setPick(null); }}
+                    style={({ pressed }) => [st.pickRow, r.id === rod?.id && st.pickOn, pressed && st.rowOn]}>
+                    <ItemIcon id={r.id} base={base} size={28} />
+                    <T style={st.pickName}>{r.name}</T>
+                    <T style={st.rowSub}>{r.large ? 'for big catches' : 'for small catches'}{r.id === equipped(2) ? ' · equipped' : ''}</T>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            {pick === 'bait' && !auto ? (
+              <View style={st.pickList}>
+                {baitList.length ? baitList.map((b) => (
+                  <Pressable key={b.key} onPress={() => { update((d) => { d.baitPick = b.key; }); setPick(null); }}
+                    style={({ pressed }) => [st.pickRow, b.key === baitSel?.key && st.pickOn, pressed && st.rowOn]}>
+                    <ItemIcon id={b.bait.id} base={base} size={28} />
+                    <T style={st.pickName}>{b.bait.name}</T>
+                    <T style={st.rowSub}>{b.bait.lure ? 'lure' : `x${b.qty}`}{b.own ? (b.bait.id === equipped(3) ? ' · equipped' : ' · bag') : ' · phone'}</T>
+                  </Pressable>
+                )) : <T style={[st.rowSub, { padding: 8 }]}>No bait left. Visit the Tackle Shop.</T>}
+              </View>
+            ) : null}
+          </Pane>
+          <View style={st.autoBox}>
+            <View style={{ flex: 1 }}>
+              <T style={st.autoTitle}>{auto ? (status.text || 'Fishing...') : 'Ready to fish'}</T>
+              <T style={st.rowSub}>{auto ? `This session: ${session.casts} casts · ${session.caught} caught` : 'It fishes by itself, at the game\'s pace.'}
+                {`  ·  today ${today}/${E.DAILY_CATCHES}`}</T>
+              {show ? (
+                <View style={[st.meter, { marginTop: 5 }]}>
+                  <LinearGradient colors={TH.staminaGrad as any} style={[st.meterFill, { width: `${Math.max(0, show.stamina)}%` }]} />
+                </View>
+              ) : null}
+            </View>
+            <Btn primary={!auto} label={auto ? 'Stop' : 'Start fishing'} onPress={() => (auto ? stopAuto(`${who} stops fishing.`) : startAuto())}
+              disabled={!auto && (!baitSel || today >= E.DAILY_CATCHES)} style={{ minWidth: 130 }} />
           </View>
-        )}
+        </View>
       </Win>
       <Pane style={st.feed}>
         {lines.slice(-8).map((l) => (
@@ -465,12 +652,12 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
             l.kind === 'bad' && { color: C.feedBad }, l.kind === 'skill' && { color: C.feedSkill, fontFamily: F.bold },
             l.kind === 'info' && { color: C.feedInfo }]}>{l.text}</T>
         ))}
-        {!lines.length && <T style={st.feedLine}>Pick a rod and bait, then cast.</T>}
+        {!lines.length && <T style={st.feedLine}>Pick a rod and bait, then Start fishing. It keeps fishing while the app is closed, too (up to {E.CATCHUP_HOURS} hours, while the bait lasts).</T>}
       </Pane>
       <View style={st.tools}>
-        <Btn small label="Change spot" onPress={() => { if (!busy) { flush(); setView('where'); } }} />
-        <Btn small label="Tackle Shop" onPress={() => !busy && setView('shop')} />
-        <Btn small label="Fish Log" onPress={() => !busy && setView('log')} />
+        <Btn small label="Change spot" onPress={() => leave('where')} />
+        <Btn small label="Tackle Shop" onPress={() => leave('shop')} />
+        <Btn small label="Fish Log" onPress={() => leave('log')} />
         <Btn small label="Send now" onPress={flush} />
       </View>
     </ScrollView>
@@ -487,32 +674,19 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
-function FightPanel({ f, tap, giveUp }: { f: Fight; tap: (d: 'L' | 'R') => void; giveUp: () => void }) {
+/** One slot of the fishing gear, like the Profile's equipment pane: the item's icon from the game, its name. */
+function GearSlot({ label, id, base, name, sub, open, locked, onPress }: { label: string; id?: number; base: string; name: string;
+  sub?: string; open: boolean; locked: boolean; onPress: () => void }) {
   return (
-    <View style={{ padding: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <T style={st.fightLabel}>Fish</T>
-        <View style={st.meter}><LinearGradient colors={TH.staminaGrad as any} style={[st.meterFill, { width: `${Math.max(0, f.stamina)}%` }]} /></View>
+    <Pressable onPress={locked ? undefined : onPress} style={({ pressed }) => [st.slot, open && st.slotOpen, pressed && !locked && st.rowOn]}>
+      <ItemIcon id={id} base={base} />
+      <View style={{ flex: 1 }}>
+        <T style={st.slotName}>{label}</T>
+        <T style={st.slotItem} numberOfLines={2}>{name}</T>
+        {sub ? <T style={st.slotSub}>{sub}</T> : null}
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-        <T style={st.fightLabel}>Time</T>
-        <View style={st.meter}><LinearGradient colors={TH.timeGrad as any} style={[st.meterFill, { width: `${(f.left / f.p.seconds) * 100}%` }]} /></View>
-      </View>
-      <LinearGradient colors={TH.arrowBox as any} style={st.arrowBox}>
-        <T style={[st.arrow, { color: f.arrow?.gold ? C.arrowGold : C.arrow, opacity: f.arrow ? 1 : 0.15 }]}>
-          {f.arrow ? (f.arrow.dir === 'L' ? '◀◀◀' : '▶▶▶') : '· · ·'}
-        </T>
-      </LinearGradient>
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-        <Pressable onPress={() => tap('L')} style={{ flex: 1 }} accessibilityLabel="Reel left">
-          <LinearGradient colors={TH.bigGrad as any} style={st.big}><T style={st.bigText}>◀</T></LinearGradient>
-        </Pressable>
-        <Pressable onPress={() => tap('R')} style={{ flex: 1 }} accessibilityLabel="Reel right">
-          <LinearGradient colors={TH.bigGrad as any} style={st.big}><T style={st.bigText}>▶</T></LinearGradient>
-        </Pressable>
-      </View>
-      <Btn small label="Give up" onPress={giveUp} style={{ alignSelf: 'center', marginTop: 6 }} />
-    </View>
+      {!locked ? <T style={st.slotArrow}>{open ? '▲' : '▼'}</T> : null}
+    </Pressable>
   );
 }
 
@@ -542,11 +716,19 @@ const st = StyleSheet.create({
   feed: { marginTop: 10, padding: 8, minHeight: 120 },
   feedLine: { fontSize: 14, lineHeight: 20 },
   tools: { flexDirection: 'row', gap: 5, marginTop: 8, flexWrap: 'wrap' },
-  fightLabel: { fontSize: 12, color: C.dim, width: 34 },
+  gear: { flexDirection: 'row', gap: 6, padding: 6 },
+  slot: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.boxBg, borderWidth: 1, borderColor: C.line, borderRadius: 4, padding: 5 },
+  slotOpen: { borderColor: C.accent },
+  slotName: { fontSize: 9.5, color: C.dim, letterSpacing: 0.5 },
+  slotItem: { fontSize: 12.5, lineHeight: 15, fontFamily: F.semi },
+  slotSub: { fontSize: 10.5, color: C.dim },
+  slotArrow: { fontSize: 10, color: C.dim },
+  pickList: { paddingHorizontal: 6, paddingBottom: 6 },
+  pickRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: C.rowLine },
+  pickOn: { backgroundColor: C.rowPressed },
+  pickName: { flex: 1, fontFamily: F.semi, fontSize: 13.5, color: C.link },
+  autoBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, padding: 8, borderWidth: 1, borderColor: C.line, borderRadius: 6, backgroundColor: C.boxBg },
+  autoTitle: { fontFamily: F.bold, fontSize: 15, color: C.accent },
   meter: { flex: 1, height: 14, backgroundColor: C.meterBg, borderWidth: 1, borderColor: C.paneEdge, borderRadius: 7, overflow: 'hidden' },
   meterFill: { height: '100%' },
-  arrowBox: { height: 74, borderRadius: 6, marginTop: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.paneEdge },
-  arrow: { fontSize: 44, fontFamily: F.bold, textShadowColor: '#000', textShadowRadius: 6 },
-  big: { height: 72, borderRadius: TH.name === 'vanadiel' ? 4 : 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.bigBorder },
-  bigText: { fontSize: 36, color: '#FFF', fontFamily: F.bold, textShadowColor: '#000', textShadowRadius: 2 },
 });

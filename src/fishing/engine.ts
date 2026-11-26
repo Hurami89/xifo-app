@@ -129,3 +129,60 @@ export function rodsFor(owned: number[]): Rod[] {
   const mine = owned.map((id) => RODS[String(id)]).filter(Boolean);
   return mine.length ? mine : [RODS[String(LOANER_ROD)]];
 }
+
+// ------------------------------------------------------------------ auto-fishing (2026-11-25)
+// The phone fishes by itself, like a fishbot: cast, wait for a bite, fight, land it or lose it, again. The pace follows
+// the game (a cast, a wait of several seconds, a fight of up to the rod's time, the catch), and the fight is played by
+// a steady but not perfect hand (AUTO_ACCURACY), so it lands a little less than a good player would in game.
+export const AUTO_ACCURACY = 0.9;       // share of arrows it answers right: it lands ~87-92% of what a careful player
+                                        // does, in fights ~10% longer, so ~85% of the fish an hour of fishing by hand brings
+export const AUTO_REACT = [0.25, 0.5];  // its reaction time, seconds (min, max)
+export const DAILY_CATCHES = 200;       // the game's fishing fatigue: a character lands at most this many a day
+export const CATCHUP_HOURS = 4;         // after the app was closed, at most this long is fished out at once
+
+export const CAST_SECONDS = 3.5;        // the cast, from the swing to the bobber settling
+export const AFTER_SECONDS = 3;         // reeling in / showing the catch before the next cast
+export const waitSeconds = () => rand(5, 14);        // until something bites (or nothing does)
+
+/** The fight played out by the auto-fisher: whether the fish tires before the rod's time runs out, and how long it
+ * took. Same numbers as the hand-played fight (fightParams). */
+export function autoFight(f: Fish, rod: Rod, skill: number, critical: boolean): { won: boolean; seconds: number } {
+  const p = fightParams(f, rod, skill, critical);
+  let stamina = 100;
+  let t = 0;
+  while (t < p.seconds) {
+    t += p.every;                                   // the next arrow
+    stamina = Math.min(100, stamina + p.pull * p.every);
+    const react = rand(AUTO_REACT[0], AUTO_REACT[1]);
+    if (react <= p.window && Math.random() < AUTO_ACCURACY) {
+      stamina -= p.hit;
+    } else {
+      stamina = Math.min(100, stamina + p.heal);
+    }
+    t += Math.min(react, p.window);
+    if (stamina <= 0) return { won: true, seconds: Math.max(3, t) };
+  }
+  return { won: false, seconds: p.seconds };
+}
+
+export type AutoResult = { kind: 'nothing' } | { kind: 'lost'; fish: Fish; why: string; seconds: number; tired: boolean }
+  | { kind: 'caught'; fish: Fish; critical: boolean; seconds: number };
+
+/** One whole cast for the auto-fisher: the bite, the fight and the end of it (no bait handling, no skill-ups). */
+export function autoCast(spot: Spot, bait: Bait, skillLevel: number, rod: Rod): AutoResult {
+  const { fish, critical } = rollHook(spot, bait, skillLevel, rod);
+  if (!fish) return { kind: 'nothing' };
+  const fight = autoFight(fish, rod, skillLevel, critical);
+  if (!fight.won) return { kind: 'lost', fish, why: fish.item ? 'it sank back into the water' : 'it got away', seconds: fight.seconds, tired: false };
+  const [lose, why] = loseChance(fish, skillLevel, rod);
+  if (Math.random() * 100 < lose) return { kind: 'lost', fish, why, seconds: fight.seconds, tired: true };
+  return { kind: 'caught', fish, critical, seconds: fight.seconds };
+}
+
+/** One whole cast's time for the auto-fisher: the cast, the wait, the fight (when something bit) and reeling in. */
+export function castSeconds(r: AutoResult, wait = waitSeconds()): number {
+  return CAST_SECONDS + wait + (r.kind === 'nothing' ? 0 : r.seconds) + AFTER_SECONDS;
+}
+
+/** The Earth day a catch counts towards (the daily fatigue). */
+export const dayKey = (ms = Date.now()) => new Date(ms).toISOString().slice(0, 10);

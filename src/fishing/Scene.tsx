@@ -8,6 +8,8 @@
 //  - the fish's shadow (its own shape: a fish, an eel, a crab...) runs the way the arrows point, closer as it tires,
 //    breaking the surface on a good tug and thrashing near the end;
 //  - the catch leaps out flipping and dangles from the line, or the line snaps, or the bobber skips back.
+//  - (2026-11-25) the angler: the character itself on the shore (drawn like a Ventures mate: Kaza's hero in its job, its
+//    own hair, skin and build), casting, waiting, reeling, cheering a catch or flinching at a lost one.
 // Plain React Native views and images (no canvas), so it works the same on phones, the website and the PC app.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
@@ -15,6 +17,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { LAKES, Lake } from './lakes';
 import { FISH_PX, PX_BIRD0, PX_BIRD1, PX_BOBBER, PX_REEL, PX_RIPPLE0, PX_RIPPLE1, PX_RIPPLE2, PX_RIPPLE3, PX_RIPPLE4, PX_RIPPLE5, PX_STAR } from './sprites';
 import { DAYS, DAY_COLORS, TimeOfDay, timeOfDay, vanaNow } from './vanatime';
+import { MateFigure } from '../ventures/Stage';
+import { FRAME } from '../ventures/art';
 
 export type Phase = 'idle' | 'cast' | 'wait' | 'bite' | 'fight' | 'caught' | 'lost';
 export const SCENE_RATIO = 240 / 126;
@@ -58,9 +62,12 @@ const TINT: Record<TimeOfDay, [string, string, string] | null> = {
   night: ['rgba(4,8,34,0.76)', 'rgba(10,20,64,0.58)', 'rgba(2,6,26,0.66)'],
 };
 
-export default function Scene({ phase, arrow, hitTick, missTick = 0, stamina = 100, catchName, catchSize, isItem, critical, large, hour, zoneId, fishId }: {
+export type Fisher = { race: number; face: number; job: number };
+const ANGLER = { x: 30, feet: GH - 7 };            // where the character stands (its feet), on the near shore at the left
+
+export default function Scene({ phase, arrow, hitTick, missTick = 0, stamina = 100, catchName, catchSize, isItem, critical, large, hour, zoneId, fishId, fisher }: {
   phase: Phase; arrow: 'L' | 'R' | null; hitTick: number; missTick?: number; stamina?: number; catchName?: string; catchSize?: number;
-  isItem?: boolean; critical?: boolean; large?: boolean; hour?: number; zoneId?: number | null; fishId?: number | null;
+  isItem?: boolean; critical?: boolean; large?: boolean; hour?: number; zoneId?: number | null; fishId?: number | null; fisher?: Fisher | null;
 }) {
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [, setFrame] = useState(0);
@@ -95,9 +102,10 @@ export default function Scene({ phase, arrow, hitTick, missTick = 0, stamina = 1
 
   useEffect(() => { const t = setInterval(() => setClock(vanaNow()), 20000); return () => clearInterval(t); }, []);
 
-  // ---- the rod (grid units): from the bottom-right corner up to the tip, bent by the load
-  const butt = { x: GW + 6, y: GH + 10 };
-  const tip0 = { x: GW * 0.84, y: GH * 0.2 };
+  // ---- the rod (grid units): from the angler's hands up and out over the water (without an angler: from the
+  // bottom-right corner, as if you held it), bent by the load
+  const butt = fisher ? { x: ANGLER.x + 7, y: ANGLER.feet - 17 } : { x: GW + 6, y: GH + 10 };
+  const tip0 = fisher ? { x: GW * 0.47, y: GH * 0.17 } : { x: GW * 0.84, y: GH * 0.2 };
   const rodLen = Math.hypot(tip0.x - butt.x, tip0.y - butt.y);
   const a0 = Math.atan2(tip0.y - butt.y, tip0.x - butt.x);
   const castWhip = (c: number) => (c < 0.3 ? 0.38 * Math.sin((c / 0.3) * Math.PI / 2) : c < 0.5 ? lerp(0.38, -0.3, (c - 0.3) / 0.2) : -0.3 * (1 - (c - 0.5) / 0.5) ** 2);
@@ -125,7 +133,7 @@ export default function Scene({ phase, arrow, hitTick, missTick = 0, stamina = 1
     const from = prev.current;
     prev.current = phase;
     if (phase === 'cast') {
-      sim.bx = Math.round(GW * rnd(0.26, 0.58));
+      sim.bx = Math.round(GW * (fisher ? rnd(0.5, 0.82) : rnd(0.26, 0.58)));
       sim.by = Math.round(hz + (GH - hz) * rnd(0.3, 0.55));
       sim.castT = 0; sim.landed = false;
       sim.leapT = 0; sim.snapT = 1; sim.homeT = 1; sim.lost = null; sim.surf = 0;
@@ -179,7 +187,8 @@ export default function Scene({ phase, arrow, hitTick, missTick = 0, stamina = 1
   function leapPos() {
     const u = easeOut(clamp(sim.leapT, 0, 1));
     const hang = sim.leapT > 1 ? Math.round(Math.sin((sim.leapT - 1) * 9) * 1.5) : 0;
-    return { x: lerp(sim.lx, GW * 0.5, u), y: lerp(sim.ly, GH * 0.42, u) - Math.sin(Math.PI * Math.min(1, sim.leapT)) * GH * 0.2 + hang };
+    const to = fisher ? { x: GW * 0.36, y: GH * 0.36 } : { x: GW * 0.5, y: GH * 0.42 };
+    return { x: lerp(sim.lx, to.x, u), y: lerp(sim.ly, to.y, u) - Math.sin(Math.PI * Math.min(1, sim.leapT)) * GH * 0.2 + hang };
   }
   function homePos() {
     const u = sim.homeT;
@@ -222,7 +231,7 @@ export default function Scene({ phase, arrow, hitTick, missTick = 0, stamina = 1
       if (ph === 'bite' && t > sim.bubbleAt) { sim.bubbleAt = t + 0.1; add('bubble', sim.bx + rnd(-5, 5), sim.by + rnd(0, 3)); }
       if (ph === 'fight') {
         const tired = 1 - L.stamina / 100;
-        const tx = clamp(sim.bx + (L.arrow ? (L.arrow === 'L' ? -1 : 1) * GW * 0.24 : GW * 0.07 * Math.sin(t * 0.8)), GW * 0.18, GW * 0.8);
+        const tx = clamp(sim.bx + (L.arrow ? (L.arrow === 'L' ? -1 : 1) * GW * 0.24 : GW * 0.07 * Math.sin(t * 0.8)), GW * 0.3, GW * 0.9);
         const ty = clamp(sim.by + tired * (GH * 0.9 - sim.by) * 0.55 + 3 * Math.sin(t * 1.9), L.hz + 8, GH * 0.9);
         const k = L.arrow ? 16 : 5;
         const c = 2 * Math.sqrt(k) * 0.75;
@@ -473,6 +482,13 @@ export default function Scene({ phase, arrow, hitTick, missTick = 0, stamina = 1
   const fgShift = lake.sway ? Math.round(Math.sin(t * 1.6)) * P : 0;
   const showTag = phase === 'caught' && !!catchName && sim.leapT > 0.75;
   const tint = TINT[tod];
+  // the angler's pose: swing on the cast, reel (the swing frames) in a fight, cheer a catch, flinch at a lost one
+  let pose: number = Math.floor(t * 1.6) % 2 ? FRAME.idle1 : FRAME.idle0;
+  if (phase === 'cast') pose = sim.castT < 0.4 ? FRAME.atk0 : FRAME.atk1;
+  else if (phase === 'bite') pose = FRAME.atk0;
+  else if (phase === 'fight') pose = Math.floor(t * (arrow ? 6 : 3)) % 2 ? FRAME.atk0 : FRAME.atk1;
+  else if (phase === 'caught') pose = sim.leapT > 0.6 ? FRAME.win : FRAME.atk0;
+  else if (phase === 'lost') pose = FRAME.hurt;
   return (
     <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', backgroundColor: '#0A1020' }]} onLayout={onLayout} pointerEvents="none">
       {P > 0 && (
@@ -481,6 +497,13 @@ export default function Scene({ phase, arrow, hitTick, missTick = 0, stamina = 1
           {tint && lake.kind !== 'night' && <LinearGradient pointerEvents="none" colors={tint} locations={[0, (hz / GH) * 0.98, 1]} style={StyleSheet.absoluteFill} />}
           {out}
           <Image source={lake.fg} style={{ position: 'absolute', left: fgShift, top: 0, width: GW * P, height: GH * P, opacity: night ? 0.85 : 1 }} />
+          {fisher ? (
+            <View style={[StyleSheet.absoluteFill, night ? { opacity: 0.82 } : null]}>
+              <View style={{ position: 'absolute', left: (ANGLER.x - 13) * P, top: (ANGLER.feet - 2) * P, width: 26 * P, height: 4 * P,
+                borderRadius: 13 * P, backgroundColor: 'rgba(0,0,0,0.28)' }} />
+              <MateFigure race={fisher.race} face={fisher.face} job={fisher.job} frame={pose} x={ANGLER.x} y={ANGLER.feet} P={P} />
+            </View>
+          ) : null}
         </View>
       )}
       {P > 0 && (

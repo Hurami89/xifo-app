@@ -109,7 +109,7 @@ export default function MeScreen({ onCards }: { onCards?: (cards: Card[]) => voi
 }
 
 /** An item's 32x32 icon, from the hub (xiforever.com/armory/icon/<id>.png, cached there). Nothing if it has none. */
-function ItemIcon({ id, base, size = 32 }: { id?: number; base: string; size?: number }) {
+export function ItemIcon({ id, base, size = 32 }: { id?: number; base: string; size?: number }) {
   const [bad, setBad] = useState(false);
   if (!id || bad) return <View style={[st.icon, { width: size, height: size }, st.iconEmpty]} />;
   return <Image source={{ uri: `${base}/armory/icon/${id}.png` }} onError={() => setBad(true)}
