@@ -5,7 +5,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { FRAME, GROUND, MOB_H, MOB_W, MOBS, MOBT, MOBT_H, MOBT_W, PARTY, PARTY_H, PARTY_W, SCENES, SCENE_H, SCENE_W } from './art';
-import { HAIR_TONES, MASK_ROW, MASK_ROWS, MATE_F, MATE_MASK, MATE_SHEET, NECK, RACE_FIT, RACE_LOOK, SKIN_TONES } from './mate_art';
+import { HAIR_TONES, MASK_ROW, MASK_ROWS, MATE_COLS, MATE_F, MATE_FROWS, MATE_MASK, MATE_POSE, MATE_SHEET, NECK, RACE_FIT, RACE_LOOK,
+  SKIN_TONES } from './mate_art';
 import type { Camp, Ev, PartyMember, VMate } from './api';
 import { F } from '../ui';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,7 +48,28 @@ function heroFor(race: number, face: number): string {
 }
 
 const INK = '#181418';
-const MATE_SCALE = 0.85;      // his heroes are drawn a little bigger than the party and the camps were laid out for
+// his heroes at their own 64 px (2026-11-25 v2), drawn as tall as v1's 40 px at 0.85 were, so the camps still fit
+const MATE_SCALE = (40 * 0.85) / 64;
+// what each job does in a fight: swing a weapon, thrust (fists, lance, puppet, claws), shoot, or cast
+const THRUST = new Set(['MNK', 'DRG', 'PUP', 'BST']);
+const SHOOT = new Set(['RNG', 'COR']);
+
+/** The mate frame for one of the old 10 poses (FRAME, used by the party sprites and the fishing scene). */
+export function mateFrame(old: number, job = 'WAR', step = 0): number {
+  const P = MATE_POSE;
+  const attack = CASTERS.has(job) ? P.cast : THRUST.has(job) ? P.thrust : SHOOT.has(job) ? P.shoot : P.swing;
+  switch (old) {
+    case FRAME.idle0: case FRAME.idle1: return P.idle[[0, 1, 2, 1][step % 4]];
+    case FRAME.walk0: case FRAME.walk1: return P.walk[[0, 1, 2, 1][step % 4]];
+    case FRAME.atk0: return attack[0];
+    case FRAME.atk1: return attack[attack.length - 1];
+    case FRAME.cast: return P.cast[step % 2];
+    case FRAME.hurt: return P.hurt[0];
+    case FRAME.sit: return P.sit[0];
+    case FRAME.win: return P.win[step % 2];
+  }
+  return P.idle[0];
+}
 
 /** One horizontal slice (rows y0..y1) of one frame of a sheet, sized sx by sy, centred on cx with its bottom on `bottom`
  * (grid pixels). Used to give each race its build: the head and the body are sized apart. */
@@ -58,11 +80,13 @@ function Slice({ src, frame, row = 0, rows = 1, y0, y1, sx, sy, cx, bottom, P, t
   const fw = MATE_F * sx * P;
   const fh = MATE_F * sy * P;
   const h = (y1 - y0) * sy * P;
+  const col = frame % MATE_COLS;
+  const frow = Math.floor(frame / MATE_COLS);
   return (
     <View style={{ position: 'absolute', left: Math.round(cx * P - fw / 2), top: Math.round(bottom * P - h), width: Math.ceil(fw),
       height: Math.ceil(h), overflow: 'hidden' }}>
-      <Image source={src} style={{ position: 'absolute', left: -frame * fw, top: -(row * fh) - y0 * sy * P, width: fw * 10,
-        height: fh * rows, ...(tint ? { tintColor: tint } : null) }} />
+      <Image source={src} style={{ position: 'absolute', left: -col * fw, top: -((row * MATE_FROWS + frow) * fh) - y0 * sy * P,
+        width: fw * MATE_COLS, height: fh * MATE_FROWS * rows, ...(tint ? { tintColor: tint } : null) }} />
     </View>
   );
 }
@@ -77,8 +101,8 @@ function Mate({ m, frame, x, y, P }: { m: Extract<Member, { kind: 'mate' }>; fra
   const hair = (HAIR_TONES[race] || HAIR_TONES.hume)[face];
   const skin = SKIN_TONES[race] || SKIN_TONES.hume;
   const [hx, hy, bx, by] = (RACE_FIT[race] || RACE_FIT.hume).map((v) => v * MATE_SCALE);
-  const neck = (NECK[sheet] || [])[frame] ?? 18;
-  const feet = y + 3 * by;                          // his frames have ~3 rows under the feet
+  const neck = (NECK[sheet] || [])[frame] ?? 29;
+  const feet = y + 5 * by;                          // his frames have ~5 rows under the feet
   const headBottom = feet - (MATE_F - neck) * by;
   const layers: [any, number | null, string | undefined][] = [[MATE_SHEET[sheet], null, undefined]];
   const mask = (name: string, tint: string) => layers.push([MATE_MASK[sheet], MASK_ROW[name], tint]);
@@ -108,7 +132,8 @@ function Mate({ m, frame, x, y, P }: { m: Extract<Member, { kind: 'mate' }>; fra
  * the fishing scene's angler. job = the game's job number (1 WAR .. 18 PUP); x, y = the feet, in 240-wide grid pixels. */
 export function MateFigure({ race, face, job, frame, x, y, P }: { race: number; face: number; job: number; frame: number; x: number;
   y: number; P: number }) {
-  return <Mate m={{ kind: 'mate', race, face, job: JOBS[job - 1] || 'WAR', weapon: 0 }} frame={frame} x={x} y={y} P={P} />;
+  const j = JOBS[job - 1] || 'WAR';
+  return <Mate m={{ kind: 'mate', race, face, job: j, weapon: 0 }} frame={mateFrame(frame, j, Math.floor(Date.now() / 300))} x={x} y={y} P={P} />;
 }
 
 export type Phase = 'road' | 'fight' | 'rest' | 'home';
@@ -233,6 +258,7 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
             .sort((a, b) => a.spot[1] - b.spot[1])
             .map(({ m, i, spot }) => {
               let frame: number = tick % 6 < 3 ? FRAME.idle0 : FRAME.idle1;
+              let mf: number | null = null;                  // a squad mate's own frame (22 of them), when it differs
               let x = spot[0];
               if (phase === 'road') {
                 frame = (tick + i) % 4 < 2 ? FRAME.walk0 : FRAME.walk1;
@@ -245,7 +271,14 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
                 const k = (c - i * 3 + 18) % 18;
                 if (k === 0) frame = CASTERS.has(m.job) ? FRAME.cast : FRAME.atk0;
                 else if (k === 1) frame = CASTERS.has(m.job) ? FRAME.cast : FRAME.atk1;
-                if (k === 1 && !CASTERS.has(m.job)) x += 6;
+                if (k === 1 && !CASTERS.has(m.job) && !SHOOT.has(m.job)) x += 6;
+                if (m.kind === 'mate') {
+                  // the whole move: wind-up, strike, follow-through (a cast: raise, then release)
+                  const atk = CASTERS.has(m.job) ? MATE_POSE.cast : THRUST.has(m.job) ? MATE_POSE.thrust
+                    : SHOOT.has(m.job) ? MATE_POSE.shoot : MATE_POSE.swing;
+                  if (k <= 2) mf = atk[Math.min(atk.length - 1, k)];
+                  else if (i === 0 && c % 9 === 4) mf = (Math.floor(c / 9) + i) % 2 ? MATE_POSE.evade[0] : MATE_POSE.hurt[0];
+                }
               }
               const casting = frame === FRAME.cast;
               const fx: React.ReactNode[] = [
@@ -260,7 +293,7 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
                 [0, 1].forEach((k) => fx.push(<View key={'d' + i + k} style={[st_.px, { left: (x - 8 - k * 4 - ((tick + i) % 3)) * P,
                   top: (spot[1] - 2 - k) * P, width: (2 + k) * P, height: (2 + k) * P, backgroundColor: 'rgba(214,196,160,0.55)' }]} />));
               }
-              const body = m.kind === 'mate' ? <Mate key={i} m={m} frame={frame} x={x} y={spot[1]} P={P} />
+              const body = m.kind === 'mate' ? <Mate key={i} m={m} frame={mf ?? mateFrame(frame, m.job, tick + i)} x={x} y={spot[1]} P={P} />
                 : <Sheet key={i} src={PARTY[m.idx] || PARTY[0]} fw={PARTY_W} fh={PARTY_H} frames={10} frame={frame} x={x} y={spot[1]} P={P} />;
               return <React.Fragment key={'f' + i}>{fx}{body}</React.Fragment>;
             })}

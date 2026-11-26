@@ -6,29 +6,40 @@ adapted to each mate (2026-11-25):
   * hair and skin: cut out into masks the app tints with the mate's own hair colour (by face) and race's skin
   * race: the app scales Tarutaru down and Galka up; Elvaan men get long ears, Mithra cat ears and a tail (masks too)
 
+(2026-11-25, v2: the user "can we increase the quality of our venture squad mates") his art at its own 64 x 64 a frame
+(v1 shrank it to 40, which blurred the outlines, eyes and trim), hair and skin masks exact to his pixels, and 22 frames
+instead of 10: a breathing idle, a full walk, swing, thrust and shot attacks, casting, hurt, dodge, rest and victory.
+
 Usage:  python art/kaza_mates.py [Aeodin Dario Kayame Lazulai]      (sources: art/oldgame-src/sv_actors, unpacked from old-hame-assets.zip)
-Writes  assets/ventures/km/<Hero>_<JOB>.png       the sheet, 10 frames of 40 x 40, facing right (4x)
-        assets/ventures/km/<Hero>_<JOB>_m.png     the masks: one 10-frame row each (see MASKS), white (4x)
+Writes  assets/ventures/km/<Hero>_<JOB>.png       the sheet: 22 frames of 64 x 64 (11 a row, 2 rows), facing right, 3x
+        assets/ventures/km/<Hero>_<JOB>_m.png     the masks: the same grid once for each of MASKS, white, 2x (Android
+                                                  draws nothing bigger than 4096 pixels, and flat-tinted masks keep fine at 2x)
         src/ventures/mate_art.ts
-        python art/kaza_mates.py --launcher C:\\FFXISOLO    the same mates for the launcher's character cards
 """
 import os
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageOps
+import numpy as np
+from PIL import Image, ImageDraw, ImageOps
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.abspath(os.path.join(HERE, '..'))
 SRC = os.path.join(HERE, 'oldgame-src', 'sv_actors')
 OUT = os.path.join(APP, 'assets', 'ventures', 'km')
-UP = 4
+UP = 3          # the sheet
+UPM = 2         # the masks
 MV = 64
-F = 40
+F = 64
+COLS, FROWS = 11, 2
 MOTION = {'walk': 0, 'wait': 1, 'chant': 2, 'guard': 3, 'damage': 4, 'evade': 5, 'thrust': 6, 'swing': 7, 'missile': 8,
           'skill': 9, 'spell': 10, 'item': 11, 'escape': 12, 'victory': 13, 'dying': 14, 'abnormal': 15, 'sleep': 16,
           'dead': 17}
-# the app's 10 frames: idle0 idle1 walk0 walk1 atk0 atk1 cast hurt sit win
-ORDER = [('wait', 0), ('wait', 1), ('walk', 0), ('walk', 2), ('swing', 0), ('swing', 2), ('spell', 1), ('damage', 0),
-         ('dying', 1), ('victory', 1)]
+# the app's 22 frames (src/ventures/mate_art.ts MATE_POSE says which is which)
+ORDER = [('wait', 0), ('wait', 1), ('wait', 2), ('walk', 0), ('walk', 1), ('walk', 2), ('swing', 0), ('swing', 1),
+         ('swing', 2), ('thrust', 0), ('thrust', 1), ('thrust', 2), ('missile', 0), ('missile', 1), ('missile', 2),
+         ('spell', 0), ('spell', 2), ('damage', 0), ('evade', 0), ('dying', 1), ('victory', 0), ('victory', 1)]
+POSES = {'idle': [0, 1, 2], 'walk': [3, 4, 5], 'swing': [6, 7, 8], 'thrust': [9, 10, 11], 'shoot': [12, 13, 14],
+         'cast': [15, 16], 'hurt': [17], 'evade': [18], 'sit': [19], 'win': [20, 21]}
+NFR = len(ORDER)
 JOBS = ['WAR', 'MNK', 'WHM', 'BLM', 'RDM', 'THF', 'PLD', 'DRK', 'BST', 'BRD', 'RNG', 'SAM', 'NIN', 'DRG', 'SMN', 'BLU',
         'COR', 'PUP']
 HEROES = ['Aeodin', 'Dario', 'Kayame', 'Lazulai']
@@ -91,95 +102,51 @@ def labels(fr, hero):
     return out
 
 
-def shrink_rgba(im, w, h):
-    big = im.resize((w * 4, h * 4), Image.LANCZOS)
-    r, g, b, a = big.split()
-    pm = Image.merge('RGB', [Image.composite(c, Image.new('L', big.size, 0), a) for c in (r, g, b)])
-    pm = pm.resize((w, h), Image.BOX)
-    a2 = a.resize((w, h), Image.BOX)
-    px, pa = pm.load(), a2.load()
-    out = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    po = out.load()
-    for y in range(h):
-        for x in range(w):
-            al = pa[x, y]
-            if al > 110:
-                c = px[x, y]
-                k = 255 / al
-                po[x, y] = (min(255, int(c[0] * k)), min(255, int(c[1] * k)), min(255, int(c[2] * k)), 255)
-    return out
-
-
 def frame_and_masks(src, hero):
-    """one 64-px frame -> the 40-px frame (mirrored to face right) and its masks (dict name -> L image)."""
-    src = ImageOps.mirror(src.convert('RGBA'))
-    lab = labels(src, hero)
-    small = shrink_rgba(src, F, F)
-    masks = {}
-    for name in MASKS[:8]:
-        kind, band = name[:4], int(name[4])
-        m = Image.new('L', src.size, 0)
-        mp = m.load()
-        for (x, y), (k, b) in lab.items():
-            if k == kind and b == band:
-                mp[x, y] = 255
-        masks[name] = m.resize((F, F), Image.BOX)
-    # each output pixel goes to the label that covers most of it (if hair/skin cover more than the rest)
-    alpha = small.split()[3].load()
-    cover = {n: masks[n].load() for n in masks}
+    """one 64-px frame, mirrored to face right, and its masks (dict name -> L image), pixel for pixel."""
+    small = ImageOps.mirror(src.convert('RGBA'))
+    arr = np.asarray(small)
+    small = Image.fromarray(np.dstack([arr[..., :3], np.where(arr[..., 3] >= 128, 255, 0).astype(np.uint8)]), 'RGBA')
+    lab = labels(small, hero)
     final = {n: Image.new('L', (F, F), 0) for n in MASKS}
     fp = {n: final[n].load() for n in final}
-    for y in range(F):
-        for x in range(F):
-            if not alpha[x, y]:
-                continue
-            best, bv = None, 0
-            for n in cover:
-                v = cover[n][x, y]
-                if v > bv:
-                    best, bv = n, v
-            tot = sum(cover[n][x, y] for n in cover)
-            if best and tot >= 128:
-                fp[best][x, y] = 255
-    # race extras from where the head and body are in this frame
-    hair = [(x, y) for y in range(F) for x in range(F) if any(fp['hair%d' % b][x, y] for b in range(4))]
-    skin = [(x, y) for y in range(F) for x in range(F) if any(fp['skin%d' % b][x, y] for b in range(4))]
+    for (x, y), (k, b) in lab.items():
+        fp[f'{k}{b}'][x, y] = 255
+    # race extras from where the head and body are in this frame (v1's shapes, at 64 px: x 1.6)
+    S = F / 40
+    hair = [(x, y) for (x, y), (k, _) in lab.items() if k == 'hair']
+    skin = [(x, y) for (x, y), (k, _) in lab.items() if k == 'skin']
     bb = small.getbbox()
     if hair and bb:
         hx0 = min(x for x, _ in hair)
         hx1 = max(x for x, _ in hair)
         hy0 = min(y for _, y in hair)
-        hy1 = max(y for _, y in hair)
         d = ImageDraw.Draw(final['cat_ears'])
         for cx in (hx0 + (hx1 - hx0) * 0.22, hx0 + (hx1 - hx0) * 0.62):
             cx = int(cx)
-            d.polygon([(cx - 2, hy0 + 2), (cx, hy0 - 3), (cx + 2, hy0 + 2)], fill=255)
-        # an Elvaan ear: from the back of the face, swept back and up
+            d.polygon([(cx - 2 * S, hy0 + 2 * S), (cx, hy0 - 3 * S), (cx + 2 * S, hy0 + 2 * S)], fill=255)
         top_skin = min((y for _, y in skin), default=None)
         if top_skin is not None:
-            band = [(x, y) for x, y in skin if top_skin <= y <= top_skin + 7]
+            band = [(x, y) for x, y in skin if top_skin <= y <= top_skin + 7 * S]
             fx0 = min(x for x, _ in band)
             fx1 = max(x for x, _ in band)
-            ex = fx0 + (fx1 - fx0) // 3          # the ear sits at the back third of the face, swept back and up
-            ey = top_skin + 4
+            ex = fx0 + (fx1 - fx0) // 3
+            ey = top_skin + 4 * S
             d = ImageDraw.Draw(final['elf_ear'])
-            d.polygon([(ex + 1, ey + 2), (ex - 1, ey - 1), (ex - 5, ey - 5), (ex - 1, ey + 3)], fill=255)
-        # a tail from the back of the hips
-        tx = bb[0] + 2
+            d.polygon([(ex + 1 * S, ey + 2 * S), (ex - 1 * S, ey - 1 * S), (ex - 5 * S, ey - 5 * S), (ex - 1 * S, ey + 3 * S)], fill=255)
+        tx = bb[0] + 2 * S
         ty = bb[1] + int((bb[3] - bb[1]) * 0.66)
         d = ImageDraw.Draw(final['tail'])
-        d.line([(tx, ty), (tx - 3, ty - 1), (tx - 5, ty - 4), (tx - 5, ty - 7)], fill=255, width=2)
+        d.line([(tx, ty), (tx - 3 * S, ty - 1 * S), (tx - 5 * S, ty - 4 * S), (tx - 5 * S, ty - 7 * S)], fill=255, width=3)
     # a dark rim round the added parts
     for part, ink in (('elf_ear', 'elf_ink'), ('cat_ears', 'cat_ink'), ('tail', 'tail_ink')):
-        mp = final[part].load()
-        ip = final[ink].load()
-        for y in range(F):
-            for x in range(F):
-                if mp[x, y]:
-                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                        nx, ny = x + dx, y + dy
-                        if 0 <= nx < F and 0 <= ny < F and not mp[nx, ny]:
-                            ip[nx, ny] = 255
+        m = np.asarray(final[part]) > 0
+        grown = m.copy()
+        grown[1:] |= m[:-1]
+        grown[:-1] |= m[1:]
+        grown[:, 1:] |= m[:, :-1]
+        grown[:, :-1] |= m[:, 1:]
+        final[ink] = Image.fromarray(np.where(grown & ~m, 255, 0).astype(np.uint8))
     return small, final
 
 
@@ -190,20 +157,19 @@ def outline_mask(m):
 
 
 def build_one(hero, job):
+    """the sheet (COLS x FROWS frames) and the masks (the same grid once per mask, stacked), both at 1x"""
     src = Image.open(os.path.join(SRC, hero + job.capitalize() + '.png')).convert('RGBA')
-    base = Image.new('RGBA', (F * 10, F), (0, 0, 0, 0))
-    mask = Image.new('L', (F * 10, F * len(MASKS)), 0)
+    base = Image.new('RGBA', (F * COLS, F * FROWS), (0, 0, 0, 0))
+    mask = Image.new('L', (F * COLS, F * FROWS * len(MASKS)), 0)
     for i, (motion, k) in enumerate(ORDER):
         fr, ms = frame_and_masks(mv_frame(src, motion, k), hero)
-        base.alpha_composite(fr, (i * F, 0))
+        cx, cy = (i % COLS) * F, (i // COLS) * F
+        base.alpha_composite(fr, (cx, cy))
         for r, name in enumerate(MASKS):
-            mask.paste(ms[name], (i * F, r * F))
-    rgb = ImageEnhance.Color(base.convert('RGB')).enhance(1.1)
-    q = rgb.quantize(colors=32, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert('RGBA')
-    q.putalpha(base.split()[3])
+            mask.paste(ms[name], (cx, cy + r * F * FROWS))
     white = Image.new('RGBA', mask.size, (255, 255, 255, 0))
     white.putalpha(mask)
-    return q, white
+    return base, white
 
 
 def ramp4(c):
@@ -237,19 +203,27 @@ FIT = {'hume': (1, 1, 1, 1), 'mithra': (0.97, 0.97, 0.97, 0.97), 'taru': (0.95, 
 
 
 def necks(name):
-    """the row under the chin in each of the 10 frames (40-px units), from the saved mask sheet"""
+    """the row under the chin in each frame (64-px units), from the saved mask sheet"""
     m = Image.open(os.path.join(OUT, name + '_m.png')).convert('RGBA')
-    m = m.resize((m.width // UP, m.height // UP), Image.NEAREST).split()[3].load()
+    m = np.asarray(m.resize((m.width // UPM, m.height // UPM), Image.NEAREST))[..., 3] > 0
     out = []
-    for f in range(10):
-        hair = [y for r in range(4) for y in range(F) for x in range(F) if m[f * F + x, r * F + y]]
-        skin = [y for r in range(4, 8) for y in range(F) for x in range(F) if m[f * F + x, r * F + y]]
-        if not hair:
-            out.append(16)
+    for f in range(NFR):
+        cx, cy = (f % COLS) * F, (f // COLS) * F
+
+        def cell(r):
+            return m[cy + r * F * FROWS: cy + r * F * FROWS + F, cx: cx + F]
+        hair = np.zeros((F, F), bool)
+        skin = np.zeros((F, F), bool)
+        for r in range(4):
+            hair |= cell(r)
+            skin |= cell(4 + r)
+        hy = np.nonzero(hair.any(axis=1))[0]
+        if not len(hy):
+            out.append(26)
             continue
-        top = min(hair)
-        face = [y for y in skin if y <= top + 16]
-        out.append(min(F - 4, (max(face) + 1) if face else max(hair) + 1))
+        top = hy.min()
+        sy = [y for y in np.nonzero(skin.any(axis=1))[0] if y <= top + 26]
+        out.append(int(min(F - 6, (max(sy) + 1) if sy else hy.max() + 1)))
     return out
 
 
@@ -266,16 +240,21 @@ def main(only=None):
         for job in JOBS:
             b, m = build_one(hero, job)
             name = f'{hero}_{job}'
-            for im, suffix in ((b, ''), (m, '_m')):
+            for im, suffix, up in ((b, '', UP), (m, '_m', UPM)):
                 p = os.path.join(OUT, name + suffix + '.png')
-                im.resize((im.width * UP, im.height * UP), Image.NEAREST).save(p, optimize=True)
+                im.resize((im.width * up, im.height * up), Image.NEAREST).save(p, optimize=True)
                 total += os.path.getsize(p)
         print(hero, 'done')
     req = lambda n: f"require('../../assets/ventures/km/{n}.png')"
-    L = ["// Made by art/kaza_mates.py: squad mates from Kaza's heroes (his art, with permission), 40 x 40 a frame, 4x.",
-         '// Draw MATE_SHEET, then each MATE_MASK row tinted (rows: ' + ', '.join(MASKS) + ').',
+    L = ["// Made by art/kaza_mates.py: squad mates from Kaza's heroes (his art, with permission), 64 x 64 a frame, sheet 3x, masks 2x.",
+         '// Frames sit in a grid of MATE_COLS x MATE_FROWS. Draw MATE_SHEET, then each MATE_MASK grid tinted (grids top to',
+         '// bottom: ' + ', '.join(MASKS) + ').',
          'export const MATE_F = %d;' % F,
+         'export const MATE_COLS = %d;' % COLS,
+         'export const MATE_FROWS = %d;' % FROWS,
          'export const MASK_ROWS = %d;' % len(MASKS),
+         '/** which frames make each pose */',
+         'export const MATE_POSE: Record<string, number[]> = { %s };' % ', '.join(f"{k}: [{', '.join(map(str, v))}]" for k, v in POSES.items()),
          'export const MASK_ROW: Record<string, number> = { %s };' % ', '.join(f'{n}: {i}' for i, n in enumerate(MASKS)),
          'export const MATE_SHEET: Record<string, any> = {']
     L += [f'  {k}: {req(k)},' for k in keys] + ['};', 'export const MATE_MASK: Record<string, any> = {']
@@ -312,36 +291,6 @@ def hero_for(race_id, face):
     return pair[(face // 2) % 2]
 
 
-def export_launcher(kit):
-    """(2026-11-25) The same mates for the launcher's character cards: the sheets and masks at 1x, the scenes for the
-    three nations, and looks.json (masks, builds, necks, hair and skin colours) -> <kit>/assets/ui/charcards/."""
-    import json
-    import shutil
-    out = os.path.join(kit, 'assets', 'ui', 'charcards')
-    os.makedirs(out, exist_ok=True)
-    keys = [f'{h}_{j}' for h in HEROES for j in JOBS]
-    for k in keys:
-        for suffix in ('', '_m'):
-            im = Image.open(os.path.join(OUT, k + suffix + '.png'))
-            im.resize((im.width // UP, im.height // UP), Image.NEAREST).save(os.path.join(out, k + suffix + '.png'), optimize=True)
-    scenes = {'sandoria': 'ronfaure', 'bastok': 'gustaberg', 'windurst': 'sarutabaruta'}
-    for nation, scene in scenes.items():
-        im = Image.open(os.path.join(APP, 'assets', 'ventures', 'bg', scene + '.png')).convert('RGB')
-        im.resize((im.width // UP, im.height // UP), Image.NEAREST).save(os.path.join(out, 'bg_' + nation + '.png'), optimize=True)
-    looks = {
-        'frame': F, 'masks': MASKS, 'races': {str(i): list(v) for i, v in RACES.items()}, 'fit': FIT,
-        'necks': {k: necks(k) for k in keys},
-        'hair': {race: [[hexc(t) for t in ramp4(_C[n])] for n in names.split()] for race, names in FACE_HAIR.items()},
-        'skin': {r: [hexc(t) for t in ramp4(c)] for r, c in SKIN_OF.items()},
-    }
-    with open(os.path.join(out, 'looks.json'), 'w') as f:
-        json.dump(looks, f, separators=(',', ':'))
-    print(f'{len(keys)} mates for the launcher -> {out}')
-
-
 if __name__ == '__main__':
     import sys
-    if sys.argv[1:2] == ['--launcher']:
-        export_launcher(sys.argv[2] if len(sys.argv) > 2 else os.path.join('C:\\', 'FFXISOLO'))
-    else:
-        main(sys.argv[1:] or None)
+    main(sys.argv[1:] or None)
