@@ -4,7 +4,8 @@
 // Plain React Native views and images on a 240 x 126 grid, like the fishing scene, so it runs the same everywhere.
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
-import { FRAME, GROUND, MATES, MATE_H, MATE_W, MOB_H, MOB_W, MOBS, MOBT, MOBT_H, MOBT_W, PARTY, PARTY_H, PARTY_W, SCENES, SCENE_H, SCENE_W } from './art';
+import { FRAME, GROUND, MATE_H, MATE_W, MOB_H, MOB_W, MOBS, MOBT, MOBT_H, MOBT_W, PARTY, PARTY_H, PARTY_W, SCENES, SCENE_H, SCENE_W } from './art';
+import { HAT_KIND, JOB_WEAPON, MATE_BODY, MATE_HEAD, MATE_TOP, MATE_WEAP, SKILL_WEAPON, WEAPON_ROW, WEAPON_ROWS } from './mate_art';
 import type { Camp, Ev, PartyMember, VMate } from './api';
 import { F } from '../ui';
 
@@ -25,11 +26,31 @@ function mobArt(mob: { name: string; look: string }) {
     : { src: MOBS[mob.look] || MOBS.slime, fw: MOB_W, fh: MOB_H, scale: MOB_SCALE };
 }
 
+/** A squad mate as in the game: race, the job's outfit, their face (hairstyle and colour) and the weapon in hand. */
+function Mate({ m, frame, x, y, P }: { m: Extract<Member, { kind: 'mate' }>; frame: number; x: number; y: number; P: number }) {
+  const race = MATE_BODY[`r${m.race}_${m.job}`] ? m.race : 1;
+  const job = MATE_BODY[`r${race}_${m.job}`] ? m.job : 'WAR';
+  const galka = race === 8;
+  const face = Math.max(0, Math.min(15, m.face | 0));
+  const weap = SKILL_WEAPON[m.weapon] || JOB_WEAPON[job];
+  const wrow = WEAPON_ROW[weap];
+  const at = { fw: MATE_W, fh: MATE_H, frames: 10, frame, x, y, P };
+  return (
+    <>
+      <Sheet src={MATE_BODY[`r${race}_${job}`]} {...at} />
+      <Sheet src={MATE_HEAD[`r${race}_${HAT_KIND[job]}`]} {...at} row={galka ? 0 : face} rows={galka ? 1 : 16} />
+      <Sheet src={MATE_TOP[`r${race}_${job}`]} {...at} />
+      {wrow != null ? <Sheet src={MATE_WEAP[`r${race}`]} {...at} row={wrow} rows={WEAPON_ROWS} /> : null}
+    </>
+  );
+}
+
 export type Phase = 'road' | 'fight' | 'rest' | 'home';
-export type Member = { kind: 'mate'; race: number; job: string } | { kind: 'party'; idx: number; job: string };
+export type Member = { kind: 'mate'; race: number; job: string; face: number; weapon: number } | { kind: 'party'; idx: number; job: string };
 
 export function membersOf(mates: VMate[], party: PartyMember[]): Member[] {
-  const out: Member[] = mates.map((m) => ({ kind: 'mate', race: m.race, job: JOBS[m.job - 1] || 'WAR' }));
+  const out: Member[] = mates.map((m) => ({ kind: 'mate', race: m.race, job: JOBS[m.job - 1] || 'WAR', face: m.face || 0,
+    weapon: m.weapon || 0 }));
   party.forEach((p, i) => {
     let h = 0;
     for (const ch of p.name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -60,15 +81,16 @@ export function stateAt(events: Ev[], sec: number, over: boolean) {
   return { phase, camp, fighting: next || last, last, hp, roadT: arrive ? Math.min(1, sec / arrive) : 1 };
 }
 
-function Sheet({ src, fw, fh, frames, frame, x, y, P, scale = 1, o = 1, flash = false }: {
+function Sheet({ src, fw, fh, frames, frame, x, y, P, scale = 1, o = 1, flash = false, row = 0, rows = 1 }: {
   src: any; fw: number; fh: number; frames: number; frame: number; x: number; y: number; P: number; scale?: number; o?: number; flash?: boolean;
+  row?: number; rows?: number;
 }) {
   const w = fw * scale * P;
   const h = fh * scale * P;
   return (
     <View style={{ position: 'absolute', left: Math.round((x - (fw * scale) / 2) * P), top: Math.round((y - fh * scale) * P), width: w, height: h,
       overflow: 'hidden', opacity: o }}>
-      <Image source={src} style={{ position: 'absolute', left: -frame * w, top: 0, width: w * frames, height: h }} />
+      <Image source={src} style={{ position: 'absolute', left: -frame * w, top: -row * h, width: w * frames, height: h * rows }} />
       {flash ? <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.25)' }]} /> : null}
     </View>
   );
@@ -133,8 +155,7 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
                 if (k === 1 && !CASTERS.has(m.job)) x += 6;
               }
               if (m.kind === 'mate') {
-                const src = MATES[`r${m.race}_${m.job}`] || MATES.r1_WAR;
-                return <Sheet key={i} src={src} fw={MATE_W} fh={MATE_H} frames={10} frame={frame} x={x} y={spot[1]} P={P} />;
+                return <Mate key={i} m={m} frame={frame} x={x} y={spot[1]} P={P} />;
               }
               return <Sheet key={i} src={PARTY[m.idx] || PARTY[0]} fw={PARTY_W} fh={PARTY_H} frames={10} frame={frame} x={x} y={spot[1]} P={P} />;
             })}

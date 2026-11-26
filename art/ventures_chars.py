@@ -44,6 +44,46 @@ JOB = {
 JOBS = list(JOB)
 STEEL, WOOD, GOLD = (200, 206, 214), (130, 90, 50), (226, 190, 80)
 
+# ---------------------------------------------------------------- the mate's own look (2026-11-25)
+# FFXI has 8 faces per race, each in 2 hair colours (1A, 1B, ... 8B = face 0..15): the hairstyle goes with the face,
+# A/B is the colour. Here: style = face // 2 (hair shape and eyes), colour from FACE_HAIR (close to the game's, by eye).
+_C = dict(black=(40, 36, 40), dbrown=(70, 44, 28), brown=(110, 70, 40), lbrown=(150, 92, 44), blonde=(214, 180, 100),
+          pblond=(232, 214, 150), red=(170, 60, 36), auburn=(130, 56, 40), orange=(210, 120, 50), silver=(200, 204, 214),
+          white=(230, 226, 210), purple=(110, 70, 120), blue=(60, 80, 140), pink=(220, 140, 160))
+_HAIRS = {
+    "hume": "dbrown blonde black lbrown brown red blonde dbrown black auburn lbrown blonde red black brown pblond",
+    "elvaan": "silver dbrown blonde black white brown auburn silver black red pblond lbrown dbrown white brown blonde",
+    "taru": "brown orange lbrown blonde red dbrown orange purple blonde brown black red pink lbrown blue orange",
+    "mithra": "brown red white black lbrown orange dbrown blonde black silver auburn brown red pblond dbrown white",
+}
+FACE_HAIR = {race: [_C[n] for n in names.split()] for race, names in _HAIRS.items()}
+
+# The layers a mate is drawn in, so the app can put any face on any job and any weapon in the hand:
+#   body  (race x job)      tail, legs, torso, the back arm
+#   head  (race x face x the hat's kind)   face, eyes, hair; the hat's kind decides how much hair shows
+#   top   (race x job)      hat, the front arm, shield, wyvern, puppet, the casting sparkle
+#   weap  (race x weapon)   what's in the hand
+LAYERS = ("body", "head", "top", "weap")
+HOODS = ("hood_w", "hood_g", "turban", "tricorne")
+HAT_KINDS = {"open": None, "helm": "helm", "hood": "hood_w"}     # a hat that stands for each kind
+
+
+def hat_kind(job):
+    hat = JOB[job][3]
+    return "hood" if hat in HOODS else ("helm" if hat in HELMS else "open")
+
+
+# weapons by the game's weapon skill (item_weapon.skill); hand-to-hand shows nothing in the hand
+WEAPONS = ["dagger", "sword", "greatsword", "axe", "greataxe", "scythe", "lance", "katana", "greatkatana", "club",
+           "staff", "bow", "gun", "harp"]
+SKILL_WEAPON = {1: "fists", 2: "dagger", 3: "sword", 4: "greatsword", 5: "axe", 6: "greataxe", 7: "scythe", 8: "lance",
+                9: "katana", 10: "greatkatana", 11: "club", 12: "staff", 25: "bow", 26: "gun", 41: "harp", 42: "harp"}
+
+
+def job_weapon(job):
+    w = JOB[job][4]
+    return "dagger" if w == "kunai" else w
+
 
 def dark(c, k=0.72):
     return tuple(max(0, int(v * k)) for v in c[:3])
@@ -77,14 +117,22 @@ class Fig:
         self.cx = 11                                     # body centre column
 
 
-def draw_frame(race_id, job, frame, hair_i=0):
+def draw_frame(race_id, job, frame, hair_i=0, layer=None, weapon=None, hair=None, hat=None):
+    """One frame. layer None: the whole figure; else one of LAYERS (see above). weapon / hair / hat replace the
+    job's weapon, the hair colour from hair_i, and the job's hat (for the head layer: only its kind matters)."""
     race, sex = RACE[race_id]
     f = Fig(race, sex)
     skin = SKIN[race]
-    hair = HAIR[hair_i % len(HAIR)] if race != "galka" else (90, 70, 60)
-    body, trim, legs, hat, weapon, extra = JOB[job]
-    im = Image.new("RGBA", (FW, FH), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
+    if hair is None:
+        hair = HAIR[hair_i % len(HAIR)]
+    if race == "galka":
+        hair = (90, 70, 60)
+    body, trim, legs, job_hat, job_weap, extra = JOB[job]
+    hat = job_hat if hat is None else hat
+    weapon = job_weap if weapon is None else weapon
+    ims = {k: Image.new("RGBA", (FW, FH), (0, 0, 0, 0)) for k in LAYERS}
+    d = ImageDraw.Draw(ims["body"])
+    dh, dt, dw = (ImageDraw.Draw(ims[k]) for k in ("head", "top", "weap"))
     pose = FRAMES[frame]
     bob = 1 if pose == "idle1" else 0
     sit = pose == "sit"
@@ -160,8 +208,10 @@ def draw_frame(race_id, job, frame, hair_i=0):
     hx0 = cx - f.hw // 2
     hx1 = hx0 + f.hw - 1
     hy1 = hy + f.hh - 1
-    draw_head(d, race, sex, pose, frame, hx0, hx1, hy, hy1, skin, hair, hair_i, hat)
-    draw_hat(d, hat, hx0, hx1, hy, hy1, body, trim, hair, race)
+    draw_head(dh, race, sex, pose, frame, hx0, hx1, hy, hy1, skin, hair, hair_i, hat)
+    if hat == job_hat:
+        draw_hat(dt, hat, hx0, hx1, hy, hy1, body, trim, hair, race)
+    d = dt                                     # everything from here on is in front of the head
 
     # ---------------------------------------------------------------- arms and weapon (in front)
     sh_y = t0 + 1
@@ -184,7 +234,7 @@ def draw_frame(race_id, job, frame, hair_i=0):
         hand = (front_x + 1, sh_y + 4)
         d.line([(front_x, sh_y), (front_x, sh_y + 3)], fill=arm)
     d.point(hand, fill=skin)
-    draw_weapon(d, weapon, hand, pose)
+    draw_weapon(dw, weapon, hand, pose)
     if extra == "shield":
         sx = back_x - 2
         d.rectangle([sx, sh_y + 1, sx + 2, sh_y + 6], fill=(90, 120, 200))
@@ -212,6 +262,11 @@ def draw_frame(race_id, job, frame, hair_i=0):
         for (x, y) in ((hand[0] + 1, hand[1] - 2), (hand[0] - 2, hand[1] - 3), (hand[0] + 2, hand[1] + 1)):
             if 0 <= x < FW and 0 <= y < FH:
                 d.point((x, y), fill=(255, 250, 180))
+    if layer is not None:
+        return outline(ims[layer])
+    im = ims["body"]
+    for k in ("head", "top", "weap"):
+        im.alpha_composite(ims[k])
     return outline(im)
 
 
@@ -391,6 +446,27 @@ def draw_weapon(d, weapon, hand, pose):
         else:
             d.line([(x, y), (x + 7, y - 2)], fill=STEEL)
             d.line([(x, y - 1), (x, y + 1)], fill=GOLD)
+    elif weapon == "greatsword":
+        if up:
+            d.rectangle([x, y - 11, x + 1, y], fill=STEEL)
+            d.line([(x - 1, y - 1), (x + 2, y - 1)], fill=GOLD)
+        else:
+            d.line([(x, y), (x + 10, y - 3)], fill=STEEL)
+            d.line([(x + 1, y + 1), (x + 10, y - 2)], fill=dark(STEEL, 0.85))
+            d.line([(x, y - 2), (x, y + 2)], fill=GOLD)
+    elif weapon == "greataxe":
+        if up:
+            d.line([(x, y + 2), (x - 1, y - 9)], fill=WOOD)
+            d.rectangle([x - 4, y - 10, x + 2, y - 7], fill=STEEL)
+        else:
+            d.line([(x - 2, y + 1), (x + 8, y - 2)], fill=WOOD)
+            d.rectangle([x + 6, y - 5, x + 9, y + 1], fill=STEEL)
+    elif weapon == "greatkatana":
+        if up:
+            d.line([(x, y + 1), (x - 3, y - 12)], fill=(230, 236, 244))
+        else:
+            d.line([(x - 1, y + 1), (x + 11, y - 4)], fill=(230, 236, 244))
+        d.line([(x, y), (x, y + 1)], fill=(40, 40, 40))
     elif weapon == "dagger" or weapon == "kunai":
         if up:
             d.line([(x, y), (x, y - 4)], fill=STEEL)

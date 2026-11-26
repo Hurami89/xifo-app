@@ -58,20 +58,7 @@ def main():
         total += os.path.getsize(bp) + os.path.getsize(fp)
         lines.append(f"  {sc}: {{ bg: require('../../assets/ventures/bg/{sc}.png'), fg: require('../../assets/ventures/fg/{sc}.png') }},")
     lines.append('};')
-    lines.append('export const MATES: Record<string, any> = {')
-    for race in range(1, 9):
-        for job in C.JOBS:
-            name = f'r{race}_{job}'
-            sheet = pack('c', name)
-            if sheet is None:
-                sheet = Image.new('RGBA', (C.FW * len(C.FRAMES), C.FH), (0, 0, 0, 0))
-                for i in range(len(C.FRAMES)):
-                    sheet.paste(snes(C.draw_frame(race, job, i, (race * 3 + C.JOBS.index(job)) % 8)), (i * C.FW, 0))
-            path = os.path.join(OUT, 'c', name + '.png')
-            up(sheet).save(path, optimize=True)
-            total += os.path.getsize(path)
-            lines.append(f"  {name}: require('../../assets/ventures/c/{name}.png'),")
-    lines.append('};')
+    # (2026-11-25) the squad mates are drawn in layers now (each mate's face and weapon): art/make_mate_layers.py
     lines.append('export const MOBS: Record<string, any> = {')
     for look in M.PAINT:
         sheet = pack('m', look)
@@ -113,7 +100,7 @@ def main():
     os.makedirs(os.path.join(APP, 'src', 'ventures'), exist_ok=True)
     with open(os.path.join(APP, 'src', 'ventures', 'art.ts'), 'w') as f:
         f.write('\n'.join(lines) + '\n')
-    print(f'{len(S.SCENES)} scenes, {8 * len(C.JOBS)} mate sheets, {len(M.PAINT)} monsters, {total // 1024} KB')
+    print(f'{len(S.SCENES)} scenes, {len(M.PAINT)} monsters, {total // 1024} KB')
 
 
 if __name__ == '__main__':

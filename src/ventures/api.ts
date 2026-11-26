@@ -4,14 +4,14 @@ import { getRandomBytes } from 'expo-crypto';
 import { call } from '../armory';
 import { getJSON, setJSON } from '../store';
 
-export type RosterMate = { slot: number; name: string; race: number; face: number; job: number; sjob: number; level: number; exp: number };
+export type RosterMate = { slot: number; name: string; race: number; face: number; weapon?: number; job: number; sjob: number; level: number; exp: number };
 export type RosterChar = { name: string; mates: RosterMate[]; at: number };
 export type CampMob = { name: string; lo: number; hi: number; look: string };
 export type Camp = { id: string; zone: number; title: string; spot: string; lo: number; hi: number; solo: boolean; scene: string; mobs: CampMob[] };
 export type Ev = { t: number; k: 'leave' | 'arrive' | 'party' | 'rest' | 'move' | 'kill' | 'home'; c?: string; camp?: string; m?: number;
   lv?: number; x?: number; d?: number; drops?: [number, number][]; gil?: number; up?: [number, number][]; sc?: string; link?: boolean; close?: boolean };
 export type PartyMember = { name: string; job: string; race: number; bot?: boolean };
-export type VMate = { slot: number; name: string; job: number; race: number; face: number; level: number; exp: number };
+export type VMate = { slot: number; name: string; job: number; race: number; face: number; weapon?: number; level: number; exp: number };
 export type Results = { exp: number[]; levels: number[]; gil: number; kills: number; items: [number, number, string][] };
 export type Venture = {
   id: string; char: string; slots: number[]; camp: string; hours: number; start: number; end: number; planned: number;
