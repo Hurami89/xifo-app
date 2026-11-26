@@ -10,6 +10,7 @@ Usage:  python art/kaza_mates.py [Aeodin Dario Kayame Lazulai]      (sources: ar
 Writes  assets/ventures/km/<Hero>_<JOB>.png       the sheet, 10 frames of 40 x 40, facing right (4x)
         assets/ventures/km/<Hero>_<JOB>_m.png     the masks: one 10-frame row each (see MASKS), white (4x)
         src/ventures/mate_art.ts
+        python art/kaza_mates.py --launcher C:\\FFXISOLO    the same mates for the launcher's character cards
 """
 import os
 
@@ -311,6 +312,36 @@ def hero_for(race_id, face):
     return pair[(face // 2) % 2]
 
 
+def export_launcher(kit):
+    """(2026-11-25) The same mates for the launcher's character cards: the sheets and masks at 1x, the scenes for the
+    three nations, and looks.json (masks, builds, necks, hair and skin colours) -> <kit>/assets/ui/charcards/."""
+    import json
+    import shutil
+    out = os.path.join(kit, 'assets', 'ui', 'charcards')
+    os.makedirs(out, exist_ok=True)
+    keys = [f'{h}_{j}' for h in HEROES for j in JOBS]
+    for k in keys:
+        for suffix in ('', '_m'):
+            im = Image.open(os.path.join(OUT, k + suffix + '.png'))
+            im.resize((im.width // UP, im.height // UP), Image.NEAREST).save(os.path.join(out, k + suffix + '.png'), optimize=True)
+    scenes = {'sandoria': 'ronfaure', 'bastok': 'gustaberg', 'windurst': 'sarutabaruta'}
+    for nation, scene in scenes.items():
+        im = Image.open(os.path.join(APP, 'assets', 'ventures', 'bg', scene + '.png')).convert('RGB')
+        im.resize((im.width // UP, im.height // UP), Image.NEAREST).save(os.path.join(out, 'bg_' + nation + '.png'), optimize=True)
+    looks = {
+        'frame': F, 'masks': MASKS, 'races': {str(i): list(v) for i, v in RACES.items()}, 'fit': FIT,
+        'necks': {k: necks(k) for k in keys},
+        'hair': {race: [[hexc(t) for t in ramp4(_C[n])] for n in names.split()] for race, names in FACE_HAIR.items()},
+        'skin': {r: [hexc(t) for t in ramp4(c)] for r, c in SKIN_OF.items()},
+    }
+    with open(os.path.join(out, 'looks.json'), 'w') as f:
+        json.dump(looks, f, separators=(',', ':'))
+    print(f'{len(keys)} mates for the launcher -> {out}')
+
+
 if __name__ == '__main__':
     import sys
-    main(sys.argv[1:] or None)
+    if sys.argv[1:2] == ['--launcher']:
+        export_launcher(sys.argv[2] if len(sys.argv) > 2 else os.path.join('C:\\', 'FFXISOLO'))
+    else:
+        main(sys.argv[1:] or None)

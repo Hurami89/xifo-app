@@ -8,8 +8,8 @@
 //  - the fish's shadow (its own shape: a fish, an eel, a crab...) runs the way the arrows point, closer as it tires,
 //    breaking the surface on a good tug and thrashing near the end;
 //  - the catch leaps out flipping and dangles from the line, or the line snaps, or the bobber skips back.
-//  - (2026-11-25) the angler: the character itself on the shore (drawn like a Ventures mate: Kaza's hero in its job, its
-//    own hair, skin and build), casting, waiting, reeling, cheering a catch or flinching at a lost one.
+//  - (2026-11-25) an optional angler (the `fisher` prop: the character on the shore, drawn like a Ventures mate); the FISH
+//    screen leaves it out: the user prefers the first-person rod.
 // Plain React Native views and images (no canvas), so it works the same on phones, the website and the PC app.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';

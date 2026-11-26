@@ -588,8 +588,7 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
           <View style={{ width: '100%', aspectRatio: SCENE_RATIO, overflow: 'hidden', backgroundColor: '#0A1A2C' }} />
           <Scene phase={phase} arrow={show?.arrow || null} hitTick={hitTick} missTick={missTick} stamina={show?.stamina ?? 100}
             critical={critBite} large={show?.fish.large ?? landedFish?.large} zoneId={zone?.id} fishId={show?.fish.id ?? landedFish?.id}
-            catchName={landedFish?.name} catchSize={landedFish?.size} isItem={landedFish?.item}
-            fisher={{ race: card.race, face: card.face, job: card.mjob }} />
+            catchName={landedFish?.name} catchSize={landedFish?.size} isItem={landedFish?.item} />
           <LinearGradient colors={['rgba(0,10,40,0.6)', 'rgba(0,10,40,0.0)']} style={st.sceneShade} pointerEvents="none">
             <T style={st.sceneTitle}>{spot?.name}</T>
             <T style={st.sceneSub}>{zone?.name}{zone?.city ? ' · town' : ''}</T>
