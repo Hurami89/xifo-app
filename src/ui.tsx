@@ -152,7 +152,9 @@ const s = StyleSheet.create({
   caps: { flexDirection: 'row', gap: 3 },
   cap: { width: vana ? 22 : 24, height: vana ? 19 : 22, borderRadius: vana ? 2 : 4, borderWidth: 1, borderColor: TH.capBorder, alignItems: 'center', justifyContent: 'center' },
   capText: { color: '#FFF', fontFamily: F.bold, fontSize: 15, lineHeight: 18, marginTop: -2 },
-  body: { flex: 1, backgroundColor: TH.winBg, margin: vana ? 0 : 3, marginTop: 0, padding: 8 },
+  // (2026-11-25) flexGrow, not flex: 1. On phones flex: 1 sizes a window that doesn't fill the screen from nothing, so
+  // the Stinkshell sign-in window showed only its title bar ("minimized"). Windows that fill the screen still do.
+  body: { flexGrow: 1, flexShrink: 1, backgroundColor: TH.winBg, margin: vana ? 0 : 3, marginTop: 0, padding: 8 },
   pane: { backgroundColor: TH.paneBg, borderWidth: 1, borderColor: TH.paneEdge, borderRadius: vana ? 2 : 3 },
   strip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: TH.line },
   stripText: { flex: 1, fontFamily: F.bold, fontSize: 13, color: TH.stripText },
