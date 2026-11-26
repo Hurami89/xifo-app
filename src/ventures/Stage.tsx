@@ -4,8 +4,8 @@
 // Plain React Native views and images on a 240 x 126 grid, like the fishing scene, so it runs the same everywhere.
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
-import { FRAME, GROUND, MATE_H, MATE_W, MOB_H, MOB_W, MOBS, MOBT, MOBT_H, MOBT_W, PARTY, PARTY_H, PARTY_W, SCENES, SCENE_H, SCENE_W } from './art';
-import { HAT_KIND, JOB_WEAPON, MATE_BODY, MATE_HEAD, MATE_TOP, MATE_WEAP, SKILL_WEAPON, WEAPON_ROW, WEAPON_ROWS } from './mate_art';
+import { FRAME, GROUND, MOB_H, MOB_W, MOBS, MOBT, MOBT_H, MOBT_W, PARTY, PARTY_H, PARTY_W, SCENES, SCENE_H, SCENE_W } from './art';
+import { HAIR_TONES, MASK_ROW, MASK_ROWS, MATE_F, MATE_MASK, MATE_SHEET, RACE_LOOK, SKIN_TONES } from './mate_art';
 import type { Camp, Ev, PartyMember, VMate } from './api';
 import { F } from '../ui';
 
@@ -26,21 +26,41 @@ function mobArt(mob: { name: string; look: string }) {
     : { src: MOBS[mob.look] || MOBS.slime, fw: MOB_W, fh: MOB_H, scale: MOB_SCALE };
 }
 
-/** A squad mate as in the game: race, the job's outfit, their face (hairstyle and colour) and the weapon in hand. */
+/** Kaza's hero for this mate: men Aeodin or Dario, women Kayame or Lazulai (by face); Elvaan women Kayame (her long
+ * ears), Mithra Lazulai. */
+function heroFor(race: number, face: number): string {
+  const [r, sex] = RACE_LOOK[race] || RACE_LOOK[1];
+  if (r === 'elvaan' && sex === 'f') return 'Kayame';
+  if (r === 'mithra') return 'Lazulai';
+  const pick = Math.floor(face / 2) % 2;
+  return sex === 'm' ? (pick ? 'Dario' : 'Aeodin') : (pick ? 'Lazulai' : 'Kayame');
+}
+
+const INK = '#181418';
+const MATE_SCALE = 0.85;      // his heroes are drawn a little bigger than the party and the camps were laid out for
+
+/** A squad mate as in the game: Kaza's hero in the job's outfit, with the mate's own hair colour (by face) and race
+ * (skin, size, Elvaan ears, Mithra ears and tail). */
 function Mate({ m, frame, x, y, P }: { m: Extract<Member, { kind: 'mate' }>; frame: number; x: number; y: number; P: number }) {
-  const race = MATE_BODY[`r${m.race}_${m.job}`] ? m.race : 1;
-  const job = MATE_BODY[`r${race}_${m.job}`] ? m.job : 'WAR';
-  const galka = race === 8;
+  const [race, sex, scale] = RACE_LOOK[m.race] || RACE_LOOK[1];
   const face = Math.max(0, Math.min(15, m.face | 0));
-  const weap = SKILL_WEAPON[m.weapon] || JOB_WEAPON[job];
-  const wrow = WEAPON_ROW[weap];
-  const at = { fw: MATE_W, fh: MATE_H, frames: 10, frame, x, y, P };
+  const key = `${heroFor(m.race, face)}_${m.job}`;
+  const sheet = MATE_SHEET[key] ? key : 'Aeodin_WAR';
+  const hair = (HAIR_TONES[race] || HAIR_TONES.hume)[face];
+  const skin = SKIN_TONES[race] || SKIN_TONES.hume;
+  const at = { fw: MATE_F, fh: MATE_F, frames: 10, frame, x, y: y + 3, P, scale: scale * MATE_SCALE };
+  const mask = (name: string, tint: string) => (
+    <Sheet key={name} src={MATE_MASK[sheet]} {...at} row={MASK_ROW[name]} rows={MASK_ROWS} tint={tint} />
+  );
+  const extra: [string, string][] = [];
+  if (race === 'elvaan' && sex === 'm') extra.push(['elf_ink', INK], ['elf_ear', skin[1]]);
+  if (race === 'mithra') extra.push(['cat_ink', INK], ['tail', hair[2]], ['cat_ears', hair[1]]);
   return (
     <>
-      <Sheet src={MATE_BODY[`r${race}_${job}`]} {...at} />
-      <Sheet src={MATE_HEAD[`r${race}_${HAT_KIND[job]}`]} {...at} row={galka ? 0 : face} rows={galka ? 1 : 16} />
-      <Sheet src={MATE_TOP[`r${race}_${job}`]} {...at} />
-      {wrow != null ? <Sheet src={MATE_WEAP[`r${race}`]} {...at} row={wrow} rows={WEAPON_ROWS} /> : null}
+      <Sheet src={MATE_SHEET[sheet]} {...at} />
+      {[0, 1, 2, 3].map((i) => mask(`hair${i}`, hair[i]))}
+      {[0, 1, 2, 3].map((i) => mask(`skin${i}`, skin[i]))}
+      {extra.map(([n, t]) => mask(n, t))}
     </>
   );
 }
@@ -81,16 +101,17 @@ export function stateAt(events: Ev[], sec: number, over: boolean) {
   return { phase, camp, fighting: next || last, last, hp, roadT: arrive ? Math.min(1, sec / arrive) : 1 };
 }
 
-function Sheet({ src, fw, fh, frames, frame, x, y, P, scale = 1, o = 1, flash = false, row = 0, rows = 1 }: {
+function Sheet({ src, fw, fh, frames, frame, x, y, P, scale = 1, o = 1, flash = false, row = 0, rows = 1, tint }: {
   src: any; fw: number; fh: number; frames: number; frame: number; x: number; y: number; P: number; scale?: number; o?: number; flash?: boolean;
-  row?: number; rows?: number;
+  row?: number; rows?: number; tint?: string;
 }) {
   const w = fw * scale * P;
   const h = fh * scale * P;
   return (
     <View style={{ position: 'absolute', left: Math.round((x - (fw * scale) / 2) * P), top: Math.round((y - fh * scale) * P), width: w, height: h,
       overflow: 'hidden', opacity: o }}>
-      <Image source={src} style={{ position: 'absolute', left: -frame * w, top: -row * h, width: w * frames, height: h * rows }} />
+      <Image source={src} style={{ position: 'absolute', left: -frame * w, top: -row * h, width: w * frames, height: h * rows,
+        ...(tint ? { tintColor: tint } : null) }} />
       {flash ? <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.25)' }]} /> : null}
     </View>
   );
