@@ -7,6 +7,7 @@ import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { FRAME, GROUND, MOB_H, MOB_W, MOBS, MOBT, MOBT_H, MOBT_W, PARTY, PARTY_H, PARTY_W, SCENES, SCENE_H, SCENE_W } from './art';
 import { HAIR_TONES, MASK_ROW, MASK_ROWS, MATE_COLS, MATE_F, MATE_FROWS, MATE_MASK, MATE_POSE, MATE_SHEET, NECK, RACE_FIT, RACE_LOOK,
   SKIN_TONES } from './mate_art';
+import { GEN_COLS, GEN_CX, GEN_FH, GEN_FOOT, GEN_FROWS, GEN_FW, GEN_POSE, GEN_SHEET, GEN_TALL } from './gen_art';
 import type { Camp, Ev, PartyMember, VMate } from './api';
 import { F } from '../ui';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -54,19 +55,20 @@ const MATE_SCALE = (40 * 0.85) / 64;
 const THRUST = new Set(['MNK', 'DRG', 'PUP', 'BST']);
 const SHOOT = new Set(['RNG', 'COR']);
 
-/** The mate frame for one of the old 10 poses (FRAME, used by the party sprites and the fishing scene). */
-export function mateFrame(old: number, job = 'WAR', step = 0): number {
+/** The mate frame for one of the old 10 poses (FRAME, used by the party sprites and the fishing scene). A job with a
+ * generated sheet (`gen`) is played more slowly: its frames are whole drawings, not in-betweens, and flicker when rushed. */
+export function mateFrame(old: number, job = 'WAR', step = 0, gen = !!GEN_SHEET[job]): number {
   const P = MATE_POSE;
   const attack = CASTERS.has(job) ? P.cast : THRUST.has(job) ? P.thrust : SHOOT.has(job) ? P.shoot : P.swing;
   switch (old) {
-    case FRAME.idle0: case FRAME.idle1: return P.idle[[0, 1, 2, 1][step % 4]];
-    case FRAME.walk0: case FRAME.walk1: return P.walk[[0, 1, 2, 1][step % 4]];
+    case FRAME.idle0: case FRAME.idle1: return P.idle[[0, 1, 2, 1][Math.floor(step / (gen ? 3 : 1)) % 4]];
+    case FRAME.walk0: case FRAME.walk1: return P.walk[[0, 1, 2, 1][Math.floor(step / (gen ? 2 : 1)) % 4]];
     case FRAME.atk0: return attack[0];
     case FRAME.atk1: return attack[attack.length - 1];
-    case FRAME.cast: return P.cast[step % 2];
+    case FRAME.cast: return P.cast[Math.floor(step / (gen ? 3 : 1)) % 2];
     case FRAME.hurt: return P.hurt[0];
     case FRAME.sit: return P.sit[0];
-    case FRAME.win: return P.win[step % 2];
+    case FRAME.win: return P.win[Math.floor(step / (gen ? 3 : 1)) % 2];
   }
   return P.idle[0];
 }
@@ -85,15 +87,61 @@ function Slice({ src, frame, row = 0, rows = 1, y0, y1, sx, sy, cx, bottom, P, t
   return (
     <View style={{ position: 'absolute', left: Math.round(cx * P - fw / 2), top: Math.round(bottom * P - h), width: Math.ceil(fw),
       height: Math.ceil(h), overflow: 'hidden' }}>
-      <Image source={src} style={{ position: 'absolute', left: -col * fw, top: -((row * MATE_FROWS + frow) * fh) - y0 * sy * P,
+      <Image source={src} resizeMode="stretch" style={{ position: 'absolute', left: -col * fw, top: -((row * MATE_FROWS + frow) * fh) - y0 * sy * P,
         width: fw * MATE_COLS, height: fh * MATE_FROWS * rows, ...(tint ? { tintColor: tint } : null) }} />
     </View>
   );
 }
 
-/** A squad mate as in the game: Kaza's hero in the job's outfit, with the mate's own hair colour (by face) and race:
- * skin, build (Taru short and round, Elvaan long, Galka broad and big), Elvaan ears, Mithra ears and tail, Galka tail. */
-function Mate({ m, frame, x, y, P }: { m: Extract<Member, { kind: 'mate' }>; frame: number; x: number; y: number; P: number }) {
+// (2026-11-26) Jobs that have a generated sheet (gen_art.ts, art/gen_mates.py) are drawn from it: the job has a file
+// for every race look, so there is nothing to tint or rebuild. A job without one stays Kaza's.
+const GEN_SCALE = 31 / GEN_TALL;          // a Hume stands 31 grid pixels tall, about as tall as Kaza's heroes
+/** For each of the 22 mate frames (MATE_POSE): [the generated sheet's frame, squash, steps back]. */
+const GEN_OF: [number, number, number][] = [];
+{
+  const put = (from: number[], to: number[], squash = 1, back = 0) =>
+    from.forEach((f, k) => { GEN_OF[f] = [to[Math.min(k, to.length - 1)], squash, back]; });
+  put(MATE_POSE.idle, GEN_POSE.idle);
+  put(MATE_POSE.walk, GEN_POSE.walk);
+  put(MATE_POSE.swing, GEN_POSE.attack);
+  put(MATE_POSE.thrust, GEN_POSE.attack);
+  put(MATE_POSE.shoot, GEN_POSE.attack);
+  put(MATE_POSE.cast, GEN_POSE.ability);                  // a mage's attack is its spell
+  put(MATE_POSE.win, GEN_POSE.ability);
+  put(MATE_POSE.hurt, GEN_POSE.hurt);
+  put(MATE_POSE.evade, [GEN_POSE.idle[0]], 1, 5);         // the sheets have no dodge: a step back
+  put(MATE_POSE.sit, [GEN_POSE.idle[1]], 0.82);           // nor a seat: hunkered down
+}
+
+/** A squad mate from its job's generated sheet: the file of its race look, sized by its race. `frame` is one of the 22
+ * mate frames, as for Kaza's heroes. */
+function GenMate({ m, frame, x, y, P }: { m: Extract<Member, { kind: 'mate' }>; frame: number; x: number; y: number; P: number }) {
+  const look = RACE_LOOK[m.race] || RACE_LOOK[1];
+  const looks = GEN_SHEET[m.job];
+  const src = looks[Math.max(0, Math.min(looks.length - 1, (m.race | 0) - 1))];
+  const [f, squash, back] = GEN_OF[frame] || GEN_OF[0];
+  const sx = GEN_SCALE * look[2] * P;                     // screen pixels for one of the frame's pixels
+  const sy = sx * squash;
+  const fw = GEN_FW * sx;
+  const fh = GEN_FH * sy;
+  return (
+    <View style={{ position: 'absolute', left: Math.round((x - back) * P - GEN_CX * sx), top: Math.round(y * P - GEN_FOOT * sy),
+      width: Math.ceil(fw), height: Math.ceil(fh), overflow: 'hidden' }}>
+      <Image source={src} resizeMode="stretch" style={{ position: 'absolute', left: -(f % GEN_COLS) * fw, top: -Math.floor(f / GEN_COLS) * fh,
+        width: fw * GEN_COLS, height: fh * GEN_FROWS }} />
+    </View>
+  );
+}
+
+/** A squad mate as in the game. A job with a generated sheet: the picture of the mate's race look in that job
+ * (GenMate). Any other job: Kaza's hero (KazaMate). */
+function Mate(p: { m: Extract<Member, { kind: 'mate' }>; frame: number; x: number; y: number; P: number }) {
+  return GEN_SHEET[p.m.job] ? <GenMate {...p} /> : <KazaMate {...p} />;
+}
+
+/** Kaza's hero in the job's outfit, with the character's own hair colour (by face) and race: skin, build (Taru short
+ * and round, Elvaan long, Galka broad and big), Elvaan ears, Mithra ears and tail, Galka tail. */
+function KazaMate({ m, frame, x, y, P }: { m: Extract<Member, { kind: 'mate' }>; frame: number; x: number; y: number; P: number }) {
   const [race, sex] = RACE_LOOK[m.race] || RACE_LOOK[1];
   const face = Math.max(0, Math.min(15, m.face | 0));
   const key = `${heroFor(m.race, face)}_${m.job}`;
@@ -128,12 +176,14 @@ function Mate({ m, frame, x, y, P }: { m: Extract<Member, { kind: 'mate' }>; fra
   );
 }
 
-/** A character drawn like a squad mate (Kaza's hero in its job, its own hair, skin and build), for other screens:
- * the fishing scene's angler. job = the game's job number (1 WAR .. 18 PUP); x, y = the feet, in 240-wide grid pixels. */
+/** A character as Kaza's hero in its job, with its own hair, skin and build, for other screens: the fishing scene's
+ * angler (always his: the rod is held where his heroes' hands are, and the generated sheets carry weapons and pets).
+ * job = the game's job number (1 WAR .. 18 PUP); x, y = the feet, in 240-wide grid pixels. */
 export function MateFigure({ race, face, job, frame, x, y, P }: { race: number; face: number; job: number; frame: number; x: number;
   y: number; P: number }) {
   const j = JOBS[job - 1] || 'WAR';
-  return <Mate m={{ kind: 'mate', race, face, job: j, weapon: 0 }} frame={mateFrame(frame, j, Math.floor(Date.now() / 300))} x={x} y={y} P={P} />;
+  return <KazaMate m={{ kind: 'mate', race, face, job: j, weapon: 0 }} frame={mateFrame(frame, j, Math.floor(Date.now() / 300), false)}
+    x={x} y={y} P={P} />;
 }
 
 export type Phase = 'road' | 'fight' | 'rest' | 'home';
@@ -208,8 +258,13 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
   const mob = fe && st.fighting && st.fighting.m != null ? fe.mobs[st.fighting.m] : camp?.mobs[0];
   const members = membersOf(mates, party);
   const c = tick % 18;
-  const hitNow = phase === 'fight' && members.some((_, i) => (c === (i * 3 + 1) % 18));
-  const hitAfter = phase === 'fight' && members.some((_, i) => (c === (i * 3 + 2) % 18));     // the frame after a hit
+  // (2026-11-26) a mate with a sheet of its own makes its other move on every fourth turn: a fighter its job's
+  // ability (a battle cry, an aura, a roll of the dice: nothing lands on the monster then), a mage a blow with its
+  // weapon in place of a spell
+  const other = (m: Member, i: number) => m.kind === 'mate' && !!GEN_SHEET[m.job] && (Math.floor((tick - i * 3) / 18) + i) % 4 === 3;
+  const special = (m: Member, i: number) => other(m, i) && !CASTERS.has(m.job);
+  const hitNow = phase === 'fight' && members.some((m, i) => c === (i * 3 + 1) % 18 && !special(m, i));
+  const hitAfter = phase === 'fight' && members.some((m, i) => c === (i * 3 + 2) % 18 && !special(m, i));     // the frame after a hit
   const onLayout = (e: LayoutChangeEvent) => setBox(e.nativeEvent.layout.width);
   const tod = (camp && INDOOR.has(camp.scene)) ? 'day' : timeOfDay(vanaNow().hour);
   const tint = TINT[tod];
@@ -269,12 +324,14 @@ export default function Stage({ camps, events, sec, over, mates, party, still, l
                 frame = tick % 8 < 5 ? FRAME.win : FRAME.idle0;
               } else {
                 const k = (c - i * 3 + 18) % 18;
-                if (k === 0) frame = CASTERS.has(m.job) ? FRAME.cast : FRAME.atk0;
-                else if (k === 1) frame = CASTERS.has(m.job) ? FRAME.cast : FRAME.atk1;
-                if (k === 1 && !CASTERS.has(m.job) && !SHOOT.has(m.job)) x += 6;
+                const own = special(m, i);                             // a fighter's ability this turn, not its attack
+                const casts = CASTERS.has(m.job) && !other(m, i);      // a mage's spell (on its other turn: its weapon)
+                if (k === 0) frame = casts ? FRAME.cast : FRAME.atk0;
+                else if (k === 1) frame = casts ? FRAME.cast : FRAME.atk1;
+                if (k === 1 && !own && !casts && !SHOOT.has(m.job)) x += 6;
                 if (m.kind === 'mate') {
-                  // the whole move: wind-up, strike, follow-through (a cast: raise, then release)
-                  const atk = CASTERS.has(m.job) ? MATE_POSE.cast : THRUST.has(m.job) ? MATE_POSE.thrust
+                  // the whole move: wind-up, strike, follow-through (a cast or an ability: raise, then release)
+                  const atk = casts || own ? MATE_POSE.cast : THRUST.has(m.job) ? MATE_POSE.thrust
                     : SHOOT.has(m.job) ? MATE_POSE.shoot : MATE_POSE.swing;
                   if (k <= 2) mf = atk[Math.min(atk.length - 1, k)];
                   else if (i === 0 && c % 9 === 4) mf = (Math.floor(c / 9) + i) % 2 ? MATE_POSE.evade[0] : MATE_POSE.hurt[0];

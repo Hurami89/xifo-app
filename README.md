@@ -34,5 +34,7 @@ ME and FISH talk to the armory on xiforever.com (`dev/armory/armory_service.py` 
 ## Art
 `art/make_app_art.py` draws the icons, taskbar buttons, 88x31 buttons, buddy icons and emoticons with the launcher's Aero art code (`art-src/scripts/aero_lib.py` in the kit repo), and copies the Aero banners, The Hub banner and the hardcore shields and cards from the kit. Lettering: Selawik (SIL Open Font License, `assets/fonts/OFL-selawik.txt`).
 
+The Ventures squad mates (`assets/ventures/gm`, a file for each job and race look, and `src/ventures/gen_art.ts`) are cut by `art/gen_mates.py` from sprite sheets made with an AI image tool. `art/gen/PROMPT.md` has the prompt, what a sheet must look like and how to add or replace one; the raw sheets are about 3 MB each and stay out of the repository.
+
 ## License
 GPL-3.0, like the rest of XI: Forever Offline. XI: Forever Offline is an unofficial fan project, not affiliated with or endorsed by Square Enix. FINAL FANTASY is a registered trademark of Square Enix Holdings Co., Ltd. FINAL FANTASY XI © SQUARE ENIX CO., LTD.

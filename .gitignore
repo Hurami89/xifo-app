@@ -46,3 +46,11 @@ __pycache__/
 art/oldgame-src/
 art/oldgame-preview.png
 art/oldgame-app-preview.png
+
+# the raw generated sprite sheets (about 3 MB each) stay on the PC; art/gen_mates.py makes the app's sheets
+# (assets/ventures/gm) from them
+/art/gen/*.png
+/art/gen/_preview/
+
+# scratch
+/_to_delete/
