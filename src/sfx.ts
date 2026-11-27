@@ -1,5 +1,5 @@
 // (2026-11-25) Sound for portable fishing and Ventures: short chiptune effects and one music loop each. Everything is
-// original (art/make_sounds.py makes it). Two switches, kept on the device: effects and music; both start on.
+// original: art/make_sounds.py makes the effects, and the music is by JØ, our Head of Music. Two switches, kept on the device: effects and music; both start on.
 // Music only plays while its screen is the one showing (Desktop.tsx tells the screen), and never before the first tap on
 // the web, where browsers refuse sound until the page has been touched.
 import { useEffect, useState } from 'react';
@@ -38,8 +38,11 @@ const FX = {
   tm_win: require('../assets/tetra/snd/snd_win_game.mp3'),
 };
 const MUSIC = {
-  fishing: require('../assets/sounds/bgm/fishing.mp3'),
-  ventures: require('../assets/sounds/bgm/ventures.mp3'),
+  // (2026-11-26) JØ's tunes for the app (his "Website 8-Bit Version" files): "Just One More Byte" for fishing and
+  // "Beyond the Next Hill" for Ventures. The two short loops make_sounds.py writes (bgm/fishing.mp3, bgm/ventures.mp3)
+  // are still in the folder and no longer played.
+  fishing: require('../assets/sounds/bgm/just_one_more_byte.mp3'),
+  ventures: require('../assets/sounds/bgm/beyond_the_next_hill_8bit.mp3'),
   tetra: require('../assets/tetra/snd/mus_quadmist.mp3'),
 };
 export type Fx = keyof typeof FX;
