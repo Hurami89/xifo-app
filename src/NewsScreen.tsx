@@ -1,9 +1,10 @@
-// NEWS: a 2004 web-portal front page. Rotating banner, newest version + patch notes, the chat room, The Hub,
-// the hardcore hall, 88x31 link buttons, and a note when a newer version of this app is out.
-import React, { useCallback, useEffect, useState } from 'react';
+// HOME (2026-11-26, before: NEWS as a 2004 web portal): the rotating banner, the newest version with the start of its
+// patch notes, who is in the chat room, The Hub, the hardcore hall when it has news, a few links, and a note when a
+// newer version of this app is out.
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import Constants from 'expo-constants';
-import { ART, Btn, C, F, Pic, PicBtn, Strip, T, Win } from './ui';
+import { ART, Btn, C, F, Pic, T, Win } from './ui';
 import Markdown from './Markdown';
 import { announcements, health, Line } from './stink';
 import { appReleasesApi, getJSON, LINKS, setJSON } from './store';
@@ -87,6 +88,9 @@ export default function NewsScreen({ goChat, goWiki }: { goChat: () => void; goW
   useEffect(() => { load(); }, [load]);
 
   const open = (url: string) => Linking.openURL(url).catch(() => {});
+  // the first few notes, two lines each, until "Read the patch notes" opens all of them
+  const first = useMemo(() => (notes ? notes.body.split('\n').map((l) => l.match(/^\s*[-*•]\s+(.*)$/)?.[1] || '')
+    .filter(Boolean).slice(0, 3).map((l) => l.replace(/\*\*|`/g, '')) : []), [notes]);
 
   return (
     <ScrollView contentContainerStyle={st.wrap} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
@@ -106,65 +110,68 @@ export default function NewsScreen({ goChat, goWiki }: { goChat: () => void; goW
         </View>
       </View>
 
-      <Win title="What's new" icon={ART.buddy.game} style={st.box} bodyStyle={{ padding: 0 }}>
+      <Win title="What's new" style={st.box} right={<T style={st.relDate}>{release?.date ? `out ${release.date}` : ''}</T>}>
         <View style={st.relRow}>
-          <View style={{ flex: 1 }}>
-            <T style={st.relLabel}>Newest version</T>
-            <T style={st.relTag}>{release ? release.tag : '...'}</T>
-            {release?.date ? <T style={st.relDate}>out {release.date}</T> : null}
-          </View>
-          <PicBtn source={ART.b88.download} label="Download XI: Forever Offline" style={st.b88} onPress={() => open(LINKS.download)} />
+          <T style={st.relTag}>{release ? release.tag : '...'}</T>
+          <Btn primary small label="Download" onPress={() => open(LINKS.download)} />
         </View>
         {notes ? (
-          <View style={{ padding: 10 }}>
-            <T style={st.notesTitle}>Patch notes {notes.title}</T>
-            <View style={!showAll && { maxHeight: 260, overflow: 'hidden' }}>
-              <Markdown text={notes.body} />
-            </View>
-            <Btn small label={showAll ? 'Show less' : 'Read all of it'} onPress={() => setShowAll(!showAll)} style={{ alignSelf: 'flex-start', marginTop: 6 }} />
-          </View>
+          <>
+            {showAll || !first.length ? (
+              <View style={!showAll && { maxHeight: 132, overflow: 'hidden' }}>
+                <Markdown text={notes.body} />
+              </View>
+            ) : first.map((line, i) => (
+              <View key={i} style={st.note}>
+                <T style={st.noteDot}>•</T>
+                <T style={st.noteText} numberOfLines={2}>{line}</T>
+              </View>
+            ))}
+            <Pressable onPress={() => setShowAll(!showAll)} accessibilityRole="button" hitSlop={8} style={{ alignSelf: 'flex-start', paddingTop: 8 }}>
+              <T style={st.more}>{showAll ? 'Show less' : 'Read the patch notes ›'}</T>
+            </Pressable>
+          </>
         ) : (
           <T style={st.muted}>Patch notes show here when you're online.</T>
         )}
       </Win>
 
-      <Win title="Stinkshell" icon={ART.buddy.phone} style={st.box}>
+      <Win title="" style={st.box}>
         <View style={st.row}>
           <View style={[st.bigDot, { backgroundColor: people ? C.dotOn : C.dotOff }]} />
           <T style={{ flex: 1, fontSize: 15 }}>
             {people == null ? "Can't reach the chat room right now." : people === 1 ? '1 person is in the chat room.' : `${people} people are in the chat room.`}
           </T>
-          <Btn primary small label="Join" onPress={goChat} />
+          <Btn small label="Join" onPress={goChat} />
         </View>
       </Win>
 
-      <Win title="The Hub" icon={ART.buddy.game} style={st.box} bodyStyle={{ padding: 0 }}>
-        <Pressable onPress={goWiki}><Pic source={ART.hub} ratio={4} /></Pressable>
-        <T style={[st.muted, { paddingTop: 8 }]}>The official world, always online. In the launcher: CO-OP, pick The Hub, VISIT.</T>
+      <Win title="The Hub" style={st.box} bodyStyle={{ padding: 0 }}>
+        <Pressable onPress={goWiki} accessibilityRole="button" accessibilityLabel="The Hub guide">
+          <Pic source={ART.hub} ratio={4} />
+          <T style={[st.muted, { padding: 10 }]}>The official world, always online. In the launcher: CO-OP, pick The Hub, VISIT.  <T style={st.more}>Guide ›</T></T>
+        </Pressable>
       </Win>
 
-      <Win title="Hall of Hardcore" icon={ART.hc.silver} style={st.box} bodyStyle={{ padding: 0 }}>
-        <Strip title="Latest from the hardcore runs" />
-        {hc.length ? hc.map((l) => (
-          <View key={l.seq} style={st.hcRow}>
-            <Image source={l.text.includes('(Steel)') ? ART.hc.steel : l.text.includes('(Silver)') ? ART.hc.silver : l.text.includes('Randomized') ? ART.hc.random : ART.hc.iron} style={{ width: 26, height: 26 }} />
-            <T style={st.hcText}>{l.text}</T>
-          </View>
-        )) : <T style={st.muted}>No news from the hardcore runs yet. Be the first!</T>}
-      </Win>
+      {hc.length ? (
+        <Win title="Hall of Hardcore" style={st.box} bodyStyle={{ padding: 0 }}>
+          {hc.map((l) => (
+            <View key={l.seq} style={st.hcRow}>
+              <Image source={l.text.includes('(Steel)') ? ART.hc.steel : l.text.includes('(Silver)') ? ART.hc.silver : l.text.includes('Randomized') ? ART.hc.random : ART.hc.iron} style={{ width: 26, height: 26 }} />
+              <T style={st.hcText}>{l.text}</T>
+            </View>
+          ))}
+        </Win>
+      ) : null}
 
-      <Win title="Links" icon={ART.buddy.web} style={st.box}>
-        <View style={st.badges}>
-          <PicBtn source={ART.b88.discord} label="Discord" style={st.b88} onPress={() => open(LINKS.discord)} />
-          <PicBtn source={ART.b88.twitch} label="Twitch" style={st.b88} onPress={() => open(LINKS.twitch)} />
-          <PicBtn source={ART.b88.github} label="GitHub" style={st.b88} onPress={() => open(LINKS.github)} />
-          <PicBtn source={ART.b88.site} label="xiforever.com" style={st.b88} onPress={() => open(LINKS.website)} />
-          <PicBtn source={ART.b88.hub} label="The Hub guide" style={st.b88} onPress={goWiki} />
-          <PicBtn source={ART.b88.download} label="Download" style={st.b88} onPress={() => open(LINKS.download)} />
-        </View>
-      </Win>
+      <View style={st.links}>
+        <Btn small label="Discord" onPress={() => open(LINKS.discord)} style={st.link} />
+        <Btn small label="Twitch" onPress={() => open(LINKS.twitch)} style={st.link} />
+        <Btn small label="GitHub" onPress={() => open(LINKS.github)} style={st.link} />
+        <Btn small label="Website" onPress={() => open(LINKS.website)} style={st.link} />
+      </View>
 
-      <T style={st.footer}>XI: Forever Offline app {APP_VERSION} · best viewed on a phone held upright{'\n'}Unofficial fan project, not affiliated with Square Enix. FINAL FANTASY XI © SQUARE ENIX CO., LTD.</T>
+      <T style={st.footer}>XIFO app {APP_VERSION}. An unofficial fan project, not affiliated with Square Enix.{'\n'}FINAL FANTASY XI © SQUARE ENIX CO., LTD.</T>
     </ScrollView>
   );
 }
@@ -174,23 +181,23 @@ const st = StyleSheet.create({
   infoBar: { backgroundColor: C.noteBg, borderWidth: 1, borderColor: C.noteEdge, borderRadius: 3, padding: 8, marginBottom: 10 },
   infoText: { fontSize: 13.5, color: C.noteText },
   hero: { borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: C.heroEdge, marginBottom: 12, backgroundColor: C.winOuter },
-  heroImg: { width: '100%', aspectRatio: 2.5 },
   dots: { position: 'absolute', bottom: 6, right: 8, flexDirection: 'row', gap: 6 },
   dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: 'rgba(8,48,110,0.6)' },
   dotOn: { backgroundColor: '#FFF' },
   box: { marginBottom: 12 },
-  relRow: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderBottomColor: C.line, backgroundColor: C.boxBg },
-  relLabel: { fontSize: 12.5, color: C.dim },
-  relTag: { fontFamily: F.bold, fontSize: 24, color: C.accent },
-  relDate: { fontSize: 12.5, color: C.dim },
-  b88: { width: 88 * 1.25, height: 31 * 1.25 },
-  notesTitle: { fontFamily: F.bold, fontSize: 15, marginBottom: 6, color: C.ink },
-  muted: { color: C.dim, fontSize: 14, padding: 10 },
+  relRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  relTag: { flex: 1, fontFamily: F.bold, fontSize: 24, color: C.accent },
+  relDate: { fontSize: 12.5, color: C.dim, paddingRight: 6 },
+  more: { fontFamily: F.semi, fontSize: 14, color: C.link },
+  note: { flexDirection: 'row', marginBottom: 6 },
+  noteDot: { width: 16, fontFamily: F.bold, fontSize: 14.5, lineHeight: 20, color: C.accent },
+  noteText: { flex: 1, fontSize: 14.5, lineHeight: 20 },
+  muted: { color: C.dim, fontSize: 14 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bigDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: 'rgba(0,0,0,0.25)' },
-  hubImg: { width: '100%', aspectRatio: 4 },
   hcRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: C.rowLine },
   hcText: { flex: 1, color: C.hardcore, fontSize: 13.5 },
-  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
-  footer: { textAlign: 'center', fontSize: 11.5, color: C.onWall, textShadowColor: C.onWallShadow, textShadowRadius: 3, marginTop: 4 },
+  links: { flexDirection: 'row', gap: 6, marginBottom: 12 },
+  link: { flex: 1 },
+  footer: { textAlign: 'center', fontSize: 11.5, lineHeight: 16, color: C.onWall, textShadowColor: C.onWallShadow, textShadowRadius: 3 },
 });

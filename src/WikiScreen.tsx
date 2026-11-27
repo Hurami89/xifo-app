@@ -1,7 +1,8 @@
-// The wiki, as a 2004 web browser window: Back / Home, an address bar, a contents page with groups.
+// The wiki: a contents page with groups, and the pages (Back and Contents above an open page).
+// (2026-11-26) Before, it was dressed as a 2004 web browser, with an address bar and a status bar that did nothing.
 // Pages ship inside the app (src/wikiData.ts) and are refreshed from GitHub (wiki/ in the app's repo) when online.
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, type ScrollViewInstance, StyleSheet, View } from 'react-native';
 import { ART, Btn, C, F, Pane, Pic, Strip, T, Win } from './ui';
 import Markdown from './Markdown';
 import { WIKI_INDEX, WIKI_PAGES } from './wikiData';
@@ -59,21 +60,18 @@ export default function WikiScreen() {
 
   return (
     <View style={st.wrap}>
-      <Win title={`${title} - Vana'diel Explorer`} icon={ART.buddy.web} style={{ flex: 1, alignSelf: 'stretch' }} bodyStyle={{ padding: 0 }}
-        onClose={() => setHistory([])}>
-        <View style={st.toolbar}>
-          <Btn small label="◀ Back" disabled={!history.length} onPress={() => setHistory((h) => h.slice(0, -1))} />
-          <Btn small label="Home" onPress={() => setHistory([])} />
-          <View style={st.address}>
-            <T style={st.addrLabel}>Address</T>
-            <View style={st.addrBox}><T style={st.addrText} numberOfLines={1}>xifo://wiki/{page || ''}</T></View>
+      <Win title={title} style={{ flex: 1, alignSelf: 'stretch' }} bodyStyle={{ padding: 0 }}
+        right={page ? (
+          <View style={st.toolbar}>
+            <Btn small label="‹ Back" onPress={() => setHistory((h) => h.slice(0, -1))} />
+            {history.length > 1 ? <Btn small label="Contents" onPress={() => setHistory([])} /> : null}
           </View>
-        </View>
+        ) : null}>
         <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
           {page ? (
-            <Pane style={{ padding: 12 }}>
-              <Markdown text={pages[page] || ''} onPage={open} />
-            </Pane>
+            <View style={{ padding: 4 }}>
+              <Markdown text={(pages[page] || '').replace(/^\s*#\s+[^\n]*\n+/, '')} onPage={open} />
+            </View>
           ) : (
             <>
               <Pic source={ART.logo} ratio={442 / 186} mode="contain" style={st.logo} />
@@ -83,7 +81,6 @@ export default function WikiScreen() {
                   <Strip title={g} />
                   {list.map((p) => (
                     <Pressable key={p.id} onPress={() => open(p.id)} style={({ pressed }) => [st.item, pressed && { backgroundColor: C.rowPressed }]}>
-                      <Image source={ART.buddy.web} style={{ width: 18, height: 18 }} />
                       <T style={st.itemText}>{p.title}</T>
                       <T style={st.arrow}>›</T>
                     </Pressable>
@@ -93,7 +90,6 @@ export default function WikiScreen() {
             </>
           )}
         </ScrollView>
-        <View style={st.statusBar}><T style={st.statusText}>Done</T><T style={st.statusText}>Internet</T></View>
       </Win>
     </View>
   );
@@ -101,16 +97,10 @@ export default function WikiScreen() {
 
 const st = StyleSheet.create({
   wrap: { flex: 1, padding: 10 },
-  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 5, padding: 6, backgroundColor: C.boxBg, borderBottomWidth: 1, borderBottomColor: C.line },
-  address: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  addrLabel: { fontSize: 12, color: C.dim },
-  addrBox: { flex: 1, backgroundColor: C.fieldBg, borderWidth: 1, borderColor: C.paneEdge, paddingHorizontal: 5, paddingVertical: 4 },
-  addrText: { fontSize: 12.5 },
+  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 4 },
   logo: { width: '70%', alignSelf: 'center', marginBottom: 6 },
   welcome: { textAlign: 'center', color: C.dim, marginBottom: 12, fontSize: 14 },
   item: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.rowLine },
   itemText: { flex: 1, fontFamily: F.semi, color: C.link, fontSize: 15.5 },
   arrow: { fontSize: 20, color: C.dim },
-  statusBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 3, backgroundColor: C.boxBg, borderTopWidth: 1, borderTopColor: C.line },
-  statusText: { fontSize: 11.5, color: C.dim },
 });

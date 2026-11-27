@@ -11,6 +11,6 @@ XI: Forever Offline (XIFO for short) is an offline, single-player take on classi
 - A simulated auction house, a living conquest map, era-accurate experience, treasure caskets, fast travel and more.
 
 ## Get it
-Read [Getting started](install), or grab the newest version from the NEWS tab.
+Read [Getting started](install), or grab the newest version from the Home tab.
 
 *XI: Forever Offline is an unofficial fan project, not affiliated with or endorsed by Square Enix. FINAL FANTASY XI © SQUARE ENIX CO., LTD.*

@@ -6,7 +6,7 @@
 - Update the game once through PlayOnline (a free trial account works). After that you play offline.
 
 ## Install
-1. Download **XI-Forever-Offline.zip** (NEWS tab > GET XIFO, or the GitHub releases page).
+1. Download **XI-Forever-Offline.zip** (the Home tab's Download button, or the GitHub releases page).
 2. Unzip it anywhere, for example `C:\XIForeverOffline`.
 3. Run **XI Forever Offline.exe** and follow the setup. It finds your game, then downloads Ashita, the server, a small database and the add-ons you pick, all from their official sources.
 4. Pick your world: Quiet world, Living world, or Living world + AI chat.

@@ -1,5 +1,5 @@
 // The armory on xiforever.com (dev/armory/armory_service.py in the kit repo): pairing with a launcher, this phone's
-// characters (ME tab) and sending portable fishing catches back (FISH tab).
+// characters (Me tab) and sending portable fishing catches back (Play > Fishing).
 import { getRandomBytes } from 'expo-crypto';
 import { getJSON, LINKS, setJSON } from './store';
 

@@ -20,4 +20,4 @@ Gil and what's in your bags are never shown on the site. The first player to syn
 - **xiforever.com/armory/fame**: the highest levels, the most jobs at 75, the best anglers, the longest adventures, the hardcore runs still standing, and the Silver memorial.
 
 ## On your phone
-Press **PAIR APP** in the launcher and type the code in this app's **ME** tab. Your phone then shows your characters, hidden ones too, with your gil.
+Press **PAIR APP** in the launcher and type the code in this app's **Me** tab. Your phone then shows your characters, hidden ones too, with your gil.

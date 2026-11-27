@@ -1,4 +1,4 @@
-// FISH: portable fishing. Pick one of your characters, a real fishing spot, a rod and bait from the character's own
+// FISHING (Play tab): portable fishing. Pick one of your characters, a real fishing spot, a rod and bait from the character's own
 // gear, and it fishes by itself, like a fishbot (2026-11-25, the user: "take out the minigame ... it still takes a bit
 // to catch a fish, comparable to in game, ... fish up a little less than in game"): see AUTO in fishing/engine.ts.
 // While the app is closed the time is fished out when it opens again (at most CATCHUP_HOURS, while the bait lasts,
@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Image, Pressable, ScrollView, StyleSheet, Vibration, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ART, Btn, C, F, Pane, Pic, Strip, T, Win } from './ui';
+import { Btn, C, F, Pane, Strip, T, Win } from './ui';
 import { faceOf } from './faces';
 import { Card, cachedMe, me, newId, Pending, Report, sendReport, siteUrl } from './armory';
 import { ItemIcon, PairBox } from './MeScreen';
@@ -15,7 +15,7 @@ import { getJSON, LINKS, setJSON } from './store';
 import * as E from './fishing/engine';
 import Scene, { Phase, SCENE_RATIO } from './fishing/Scene';
 import { TH } from './theme';
-import { sfx, useMusic, useSound, setFx, setMusic } from './sfx';
+import { sfx, useMusic } from './sfx';
 
 const RANKS = ['Amateur', 'Recruit', 'Initiate', 'Novice', 'Apprentice', 'Journeyman', 'Craftsman', 'Artisan', 'Adept', 'Veteran', 'Expert'];
 
@@ -42,7 +42,6 @@ type Status = { text: string; fish?: string };
 
 export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHint: Card[] | null; goMe: () => void; active?: boolean }) {
   useMusic('fishing', active);   // (2026-11-25) the fishing music while this tab shows
-  const sound = useSound();
   const [cards, setCards] = useState<Card[] | null>(cardsHint);
   const [pending, setPending] = useState<Pending[]>([]);
   const [unpaired, setUnpaired] = useState(false);
@@ -447,10 +446,9 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
   if (!cards || !cards.length || !card) {
     return (
       <View style={st.wrap}>
-        <Win title="Portable Fishing" icon={ART.buddy.phone}>
-          <Pic source={ART.banners[2]} ratio={2.5} style={st.banner} />
-          <T style={st.p}>Fishing needs one of your characters. Press <T style={{ fontFamily: F.bold }}>SYNC NOW</T> on the launcher's Characters page, then open ME and pull down.</T>
-          <Btn small label="Go to ME" onPress={goMe} style={{ alignSelf: 'flex-start', marginTop: 8 }} />
+        <Win title="Portable Fishing">
+          <T style={st.p}>Fishing needs one of your characters. Press <T style={{ fontFamily: F.bold }}>SYNC NOW</T> on the launcher's Characters page, then open Me and pull down.</T>
+          <Btn small label="Go to Me" onPress={goMe} style={{ alignSelf: 'flex-start', marginTop: 8 }} />
         </Win>
       </View>
     );
@@ -473,10 +471,6 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
         <Stat label="Caught" value={String(save.total)} sub={sending ? '' : undefined} />
       </View>
       {sending ? <T style={st.sending}>{sending}</T> : null}
-      <View style={{ flexDirection: 'row', gap: 5, marginTop: 4 }}>
-        <Btn small label={sound.fx ? 'Sounds: On' : 'Sounds: Off'} onPress={() => setFx(!sound.fx)} />
-        <Btn small label={sound.music ? 'Music: On' : 'Music: Off'} onPress={() => setMusic(!sound.music)} />
-      </View>
     </View>
   );
 
@@ -485,8 +479,8 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
     return (
       <ScrollView contentContainerStyle={st.wrap}>
         {head}
-        <Win title={region ? `${region} - Fishing spots` : 'Where to fish?'} icon={ART.buddy.web}>
-          {region && <Btn small label="◀ All regions" onPress={() => setRegion(null)} style={{ alignSelf: 'flex-start', marginBottom: 6 }} />}
+        <Win title={region || 'Where to fish?'}
+          right={region ? <Btn small label="‹ Regions" onPress={() => setRegion(null)} style={st.headBtn} /> : null}>
           <Pane>
             {!region ? regions.map((r) => (
               <Pressable key={r} onPress={() => setRegion(r)} style={({ pressed }) => [st.row, pressed && st.rowOn]}>
@@ -520,7 +514,7 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
     return (
       <ScrollView contentContainerStyle={st.wrap}>
         {head}
-        <Win title="Tackle Shop" icon={ART.buddy.game}>
+        <Win title="Tackle Shop" right={<Btn small label="‹ Back" onPress={() => setView(save.zone ? 'spot' : 'where')} style={st.headBtn} />}>
           <T style={st.p}>Paid with {who}'s gil (taken off at the next PLAY). Bait bought here stays on the phone; lures are never used up.</T>
           <Pane>
             {Object.entries(E.SHOP).map(([id, price]) => {
@@ -549,7 +543,6 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
               );
             })}
           </Pane>
-          <Btn label="◀ Back to fishing" onPress={() => setView(save.zone ? 'spot' : 'where')} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
         </Win>
       </ScrollView>
     );
@@ -560,7 +553,7 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
     return (
       <ScrollView contentContainerStyle={st.wrap}>
         {head}
-        <Win title={`${who}'s Fish Log`} icon={ART.buddy.game}>
+        <Win title={`${who}'s Fish Log`} right={<Btn small label="‹ Back" onPress={() => setView(save.zone ? 'spot' : 'where')} style={st.headBtn} />}>
           <T style={st.p}>{entries.length} of {Object.keys(E.FISH).length} catches found.</T>
           <Pane>
             {entries.length ? entries.map((e) => (
@@ -570,7 +563,6 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
               </View>
             )) : <T style={[st.p, { padding: 8 }]}>Nothing yet. Go catch something!</T>}
           </Pane>
-          <Btn label="◀ Back to fishing" onPress={() => setView(save.zone ? 'spot' : 'where')} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
         </Win>
       </ScrollView>
     );
@@ -583,7 +575,7 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
   return (
     <ScrollView contentContainerStyle={st.wrap}>
       {head}
-      <Win title={`${zone?.name || ''} - ${spot?.name || ''}`} icon={ART.buddy.phone} bodyStyle={{ padding: 0 }}>
+      <Win title="" bodyStyle={{ padding: 0 }}>
         <View>
           <View style={{ width: '100%', aspectRatio: SCENE_RATIO, overflow: 'hidden', backgroundColor: '#0A1A2C' }} />
           <Scene phase={phase} arrow={show?.arrow || null} hitTick={hitTick} missTick={missTick} stamina={show?.stamina ?? 100}
@@ -594,9 +586,8 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
             <T style={st.sceneSub}>{zone?.name}{zone?.city ? ' · town' : ''}</T>
           </LinearGradient>
         </View>
-        <View style={{ padding: 8 }}>
-          <Pane>
-            <Strip title="Fishing gear" />
+        <View style={{ padding: 10 }}>
+          <View>
             <View style={st.gear}>
               <GearSlot label="Range" id={rod?.id} base={base} name={rod ? rod.name + (rodOwned ? '' : ' (loaned)') : '-'}
                 open={pick === 'rod'} locked={auto} onPress={() => setPick(pick === 'rod' ? null : 'rod')} />
@@ -628,7 +619,7 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
                 )) : <T style={[st.rowSub, { padding: 8 }]}>No bait left. Visit the Tackle Shop.</T>}
               </View>
             ) : null}
-          </Pane>
+          </View>
           <View style={st.autoBox}>
             <View style={{ flex: 1 }}>
               <T style={st.autoTitle}>{auto ? (status.text || 'Fishing...') : 'Ready to fish'}</T>
@@ -645,19 +636,19 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
           </View>
         </View>
       </Win>
-      <Pane style={st.feed}>
+      <Win title="" style={st.feed} bodyStyle={{ minHeight: 64 }}>
         {lines.slice(-8).map((l) => (
           <T key={l.id} style={[st.feedLine, l.kind === 'good' && { color: C.feedGood, fontFamily: F.semi },
             l.kind === 'bad' && { color: C.feedBad }, l.kind === 'skill' && { color: C.feedSkill, fontFamily: F.bold },
             l.kind === 'info' && { color: C.feedInfo }]}>{l.text}</T>
         ))}
         {!lines.length && <T style={st.feedLine}>Pick a rod and bait, then Start fishing. It keeps fishing while the app is closed, too (up to {E.CATCHUP_HOURS} hours, while the bait lasts).</T>}
-      </Pane>
+      </Win>
       <View style={st.tools}>
-        <Btn small label="Change spot" onPress={() => leave('where')} />
-        <Btn small label="Tackle Shop" onPress={() => leave('shop')} />
-        <Btn small label="Fish Log" onPress={() => leave('log')} />
-        <Btn small label="Send now" onPress={flush} />
+        <Btn small label="Change spot" onPress={() => leave('where')} style={st.tool} />
+        <Btn small label="Tackle Shop" onPress={() => leave('shop')} style={st.tool} />
+        <Btn small label="Fish Log" onPress={() => leave('log')} style={st.tool} />
+        <Btn small label="Send now" onPress={flush} style={st.tool} />
       </View>
     </ScrollView>
   );
@@ -691,15 +682,14 @@ function GearSlot({ label, id, base, name, sub, open, locked, onPress }: { label
 
 const st = StyleSheet.create({
   wrap: { padding: 10, paddingBottom: 24 },
-  banner: { borderRadius: 4, borderWidth: 1, borderColor: C.paneEdge, marginBottom: 10 },
   p: { fontSize: 14, lineHeight: 20, marginBottom: 6 },
   head: { marginBottom: 10 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.chipBg, borderRadius: 16, paddingRight: 12, borderWidth: 1, borderColor: C.chipEdge },
   chipOn: { backgroundColor: C.chipOn, borderColor: C.chipOnEdge },
   chipFace: { width: 30, height: 28, borderRadius: 14 },
   chipName: { fontFamily: F.semi, fontSize: 14, color: C.chipText },
-  stats: { flexDirection: 'row', gap: 6, marginTop: 8 },
-  stat: { flex: 1, backgroundColor: C.statBg, borderWidth: 1, borderColor: C.chipEdge, borderRadius: 6, padding: 6, alignItems: 'center' },
+  stats: { flexDirection: 'row', marginTop: 8, backgroundColor: C.statBg, borderWidth: 1, borderColor: C.paneEdge, borderRadius: 10, paddingVertical: 6 },
+  stat: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
   statLabel: { fontSize: 11, color: C.dim },
   statValue: { fontFamily: F.bold, fontSize: 19, color: C.accent },
   statSub: { fontSize: 10.5, color: C.dim },
@@ -712,21 +702,23 @@ const st = StyleSheet.create({
   sceneTitle: { color: '#FFF', fontFamily: F.bold, fontSize: 18, textShadowColor: '#062C5C', textShadowRadius: 3 },
   sceneSub: { color: '#DDEEFF', fontSize: 12.5 },
   label: { fontFamily: F.semi, fontSize: 13, color: C.dim, marginBottom: 4 },
-  feed: { marginTop: 10, padding: 8, minHeight: 120 },
+  feed: { marginTop: 10 },
   feedLine: { fontSize: 14, lineHeight: 20 },
-  tools: { flexDirection: 'row', gap: 5, marginTop: 8, flexWrap: 'wrap' },
-  gear: { flexDirection: 'row', gap: 6, padding: 6 },
+  tools: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
+  tool: { flexBasis: '47%', flexGrow: 1 },
+  headBtn: { marginRight: 4 },
+  gear: { flexDirection: 'row', gap: 6 },
   slot: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.boxBg, borderWidth: 1, borderColor: C.line, borderRadius: 4, padding: 5 },
   slotOpen: { borderColor: C.accent },
   slotName: { fontSize: 9.5, color: C.dim, letterSpacing: 0.5 },
   slotItem: { fontSize: 12.5, lineHeight: 15, fontFamily: F.semi },
   slotSub: { fontSize: 10.5, color: C.dim },
   slotArrow: { fontSize: 10, color: C.dim },
-  pickList: { paddingHorizontal: 6, paddingBottom: 6 },
+  pickList: { marginTop: 6, backgroundColor: C.paneBg, borderRadius: 8, overflow: 'hidden' },
   pickRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: C.rowLine },
   pickOn: { backgroundColor: C.rowPressed },
   pickName: { flex: 1, fontFamily: F.semi, fontSize: 13.5, color: C.link },
-  autoBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, padding: 8, borderWidth: 1, borderColor: C.line, borderRadius: 6, backgroundColor: C.boxBg },
+  autoBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
   autoTitle: { fontFamily: F.bold, fontSize: 15, color: C.accent },
   meter: { flex: 1, height: 14, backgroundColor: C.meterBg, borderWidth: 1, borderColor: C.paneEdge, borderRadius: 7, overflow: 'hidden' },
   meterFill: { height: '100%' },

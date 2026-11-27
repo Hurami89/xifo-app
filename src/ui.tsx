@@ -1,7 +1,9 @@
-// Building blocks for both looks (src/theme.ts): windows, panes, strips, buttons, fields, pictures. Everything reads TH,
-// which App.tsx sets before this file loads.
+// Building blocks for every look (src/theme.ts): sections, panes, strips, buttons, icons, fields, pictures. Everything
+// reads TH, which App.tsx sets before this file loads.
+// (2026-11-26) The windows of the old desktop (a title bar with a minimise and a close button that did nothing) are plain
+// sections now: a title, one edge, and a close button only where closing does something.
 import React from 'react';
-import { Image, ImageSourcePropType, Pressable, StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextStyle, View, ViewStyle } from 'react-native';
+import { Image, ImageSourcePropType, ImageStyle, Pressable, StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextStyle, View, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TH } from './theme';
 
@@ -13,7 +15,6 @@ export const ART = {
   get wallpaper() { return TH.wallpaper; },
   get logo() { return TH.logo; },
   get banners() { return TH.banners; },
-  orb: require('../assets/art/start_orb.png'),
   hub: require('../assets/art/hub_banner.jpg'),
   buddy: {
     game: require('../assets/art/buddy_game.png'),
@@ -32,58 +33,85 @@ export const ART = {
     silver: require('../assets/art/hc_card_silver.png'),
     random: require('../assets/art/hc_card_random.png'),
   },
-  b88: {
-    discord: require('../assets/art/b88_discord.png'),
-    twitch: require('../assets/art/b88_twitch.png'),
-    github: require('../assets/art/b88_github.png'),
-    site: require('../assets/art/b88_site.png'),
-    download: require('../assets/art/b88_download.png'),
-    hub: require('../assets/art/b88_hub.png'),
-  },
-  tabs: {
-    chat: [require('../assets/art/tab_chat.png'), require('../assets/art/tab_chat_on.png')],
-    wiki: [require('../assets/art/tab_wiki.png'), require('../assets/art/tab_wiki_on.png')],
-    news: [require('../assets/art/tab_news.png'), require('../assets/art/tab_news_on.png')],
-    fish: [require('../assets/art/tab_fish.png'), require('../assets/art/tab_fish_on.png')],
-    vent: [require('../assets/art/tab_vent.png'), require('../assets/art/tab_vent_on.png')],
-    me: [require('../assets/art/tab_me.png'), require('../assets/art/tab_me_on.png')],
-    tm: [require('../assets/art/tab_tm.png'), require('../assets/art/tab_tm_on.png')],
-  } as Record<string, ImageSourcePropType[]>,
 };
 
-/** A window: Final Fantasy XI's navy menu with a header band (Vana'diel), or an XP glass window (Aero). */
-export function Win({ title, icon, children, style, bodyStyle, onClose }: {
-  title: string; icon?: ImageSourcePropType; children: React.ReactNode; style?: StyleProp<ViewStyle>;
-  bodyStyle?: StyleProp<ViewStyle>; onClose?: () => void;
+/** One-colour icons (art/make_ui_icons.py draws them), tinted with the look's colours. */
+export const ICONS = {
+  home: require('../assets/ui/home.png'), chat: require('../assets/ui/chat.png'), play: require('../assets/ui/play.png'),
+  book: require('../assets/ui/book.png'), person: require('../assets/ui/person.png'), gear: require('../assets/ui/gear.png'),
+  sound: require('../assets/ui/sound.png'), mute: require('../assets/ui/mute.png'), back: require('../assets/ui/back.png'),
+  close: require('../assets/ui/close.png'), check: require('../assets/ui/check.png'),
+};
+export type IconName = keyof typeof ICONS;
+
+export function Icon({ name, size = 22, color, style }: { name: IconName; size?: number; color?: string; style?: StyleProp<ImageStyle> }) {
+  return <Image source={ICONS[name]} resizeMode="contain" style={[{ width: size, height: size, tintColor: color || TH.ink }, style]} />;
+}
+
+/** An icon to press, with a finger-sized area around it. `dot`: a small red mark (something new behind it). */
+export function IconBtn({ name, label, onPress, size = 22, color, dot, style }: {
+  name: IconName; label: string; onPress?: () => void; size?: number; color?: string; dot?: boolean; style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} hitSlop={6}
+      style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }, style]}>
+      <Icon name={name} size={size} color={color} />
+      {dot ? <View style={s.iconDot} /> : null}
+    </Pressable>
+  );
+}
+
+/** A section: its title, then what is in it. `title=""` leaves the title line out; `onClose` adds a close button;
+ * `right` puts something at the end of the title line. */
+export function Win({ title, children, style, bodyStyle, onClose, right }: {
+  title: string; children: React.ReactNode; style?: StyleProp<ViewStyle>;
+  bodyStyle?: StyleProp<ViewStyle>; onClose?: () => void; right?: React.ReactNode;
 }) {
   return (
     <View style={[s.win, style]}>
-      <LinearGradient colors={TH.titleGrad as any} locations={TH.titleGrad.length === 4 ? [0, 0.12, 0.55, 1] : undefined} style={s.title}>
-        <View style={s.titleShine} />
-        {icon ? <Image source={icon} style={s.titleIcon} /> : null}
-        <Text style={s.titleText} numberOfLines={1}>{title}</Text>
-        <View style={s.caps}>
-          <LinearGradient colors={TH.capMin as any} style={s.cap}><Text style={s.capText}>_</Text></LinearGradient>
-          <Pressable onPress={onClose} hitSlop={6} accessibilityLabel="Close">
-            <LinearGradient colors={TH.capClose as any} style={s.cap}><Text style={s.capText}>×</Text></LinearGradient>
-          </Pressable>
+      {title ? (
+        <View style={s.title}>
+          <Text style={s.titleText} numberOfLines={1}>{title}</Text>
+          {right}
+          {onClose ? <IconBtn name="close" label="Close" onPress={onClose} size={16} color={TH.dim} style={s.titleClose} /> : null}
         </View>
-      </LinearGradient>
+      ) : null}
       <View style={[s.body, bodyStyle]}>{children}</View>
     </View>
   );
 }
 
+/** A darker inset inside a section, for lists. */
 export function Pane({ children, style }: { children?: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   return <View style={[s.pane, style]}>{children}</View>;
 }
 
+/** A small heading inside a section. */
 export function Strip({ title, right }: { title: string; right?: React.ReactNode }) {
   return (
-    <LinearGradient colors={TH.stripGrad as any} style={s.strip}>
+    <View style={s.strip}>
       <Text style={s.stripText}>{title}</Text>
       {right}
-    </LinearGradient>
+    </View>
+  );
+}
+
+/** A row of choices of which one is on (the games on the Play tab). Made for the top bar. */
+export function Seg<K extends string>({ items, value, onChange, style }: {
+  items: { id: K; label: string }[]; value: K; onChange: (id: K) => void; style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[s.seg, style]}>
+      {items.map((it) => {
+        const on = it.id === value;
+        return (
+          <Pressable key={it.id} onPress={() => onChange(it.id)} accessibilityRole="button" accessibilityLabel={it.label}
+            aria-selected={on} style={[s.segItem, on && s.segOn]}>
+            <Text style={[s.segText, on && s.segTextOn]} numberOfLines={1}>{it.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -91,16 +119,17 @@ export function Btn({ label, onPress, disabled, style, small, primary, active, t
   label: string; onPress?: () => void; disabled?: boolean; style?: StyleProp<ViewStyle>; small?: boolean;
   primary?: boolean; active?: boolean; textStyle?: StyleProp<TextStyle>;
 }) {
-  const colors = disabled ? TH.disabledGrad : primary ? TH.primaryGrad : active ? TH.activeGrad : TH.btnGrad;
+  // (2026-11-26) a chosen button (`active`) is filled with the look's "on" colour; a brighter edge alone was easy to miss
+  const colors = disabled ? TH.disabledGrad : primary ? TH.primaryGrad : active ? [TH.chipOn, TH.chipOn] : TH.btnGrad;
   return (
     <Pressable onPress={disabled ? undefined : onPress} accessibilityRole="button" accessibilityLabel={label} style={style}>
       {({ pressed }) => (
         <LinearGradient
           colors={(pressed && !disabled ? colors.slice().reverse() : colors) as any}
-          style={[s.btn, small && s.btnSmall, primary && s.btnPrimary, active && !primary && { borderColor: TH.accent }]}>
+          style={[s.btn, small && s.btnSmall, primary && s.btnPrimary, active && !primary && { borderColor: TH.chipOnEdge }]}>
           <View style={s.btnShine} />
           <Text style={[s.btnText, small && { fontSize: 13 }, primary && s.btnTextPrimary, disabled && { color: TH.disabledText },
-            active && !primary && { color: TH.accent }, textStyle]}>{label}</Text>
+            active && !primary && !disabled && { color: TH.chipOnText }, textStyle]} numberOfLines={1}>{label}</Text>
         </LinearGradient>
       )}
     </Pressable>
@@ -120,14 +149,6 @@ export function T({ children, style, ...rest }: React.ComponentProps<typeof Text
   return <Text style={[s.t, style]} {...rest}>{children}</Text>;
 }
 
-export function PicBtn({ source, onPress, style, label }: { source: ImageSourcePropType; onPress?: () => void; style?: StyleProp<any>; label: string }) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="link" accessibilityLabel={label}>
-      {({ pressed }) => <Image source={source} style={[style, pressed && { opacity: 0.75 }]} resizeMode="contain" />}
-    </Pressable>
-  );
-}
-
 /** A picture that keeps its shape: a frame with the aspect ratio, the image filling it. */
 export function Pic({ source, ratio, style, mode = 'cover' }: { source: ImageSourcePropType; ratio: number; style?: StyleProp<ViewStyle>; mode?: 'cover' | 'contain' }) {
   return (
@@ -138,27 +159,29 @@ export function Pic({ source, ratio, style, mode = 'cover' }: { source: ImageSou
 }
 
 const vana = TH.name === 'vanadiel';
+const cinzel = TH.titleFont === 'Cinzel';
 const s = StyleSheet.create({
   win: {
-    borderRadius: TH.winRadius, borderBottomLeftRadius: vana ? TH.winRadius : 4, borderBottomRightRadius: vana ? TH.winRadius : 4, overflow: 'hidden',
-    borderWidth: 1, borderColor: TH.winBorder, backgroundColor: TH.winOuter,
-    shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 8,
+    borderRadius: vana ? 6 : 10, overflow: 'hidden', borderWidth: 1, borderColor: TH.paneEdge, backgroundColor: TH.winBg,
+    // Android draws an elevation's shadow inside a see-through view too, so only the looks with solid sections get one
+    shadowColor: '#000', shadowOpacity: TH.cardShade, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: TH.winBg.startsWith('#') ? 3 : 0,
   },
-  title: { height: vana ? 30 : 32, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8,
-    borderBottomWidth: vana ? 1 : 0, borderBottomColor: '#8E97C2' },
-  titleShine: { position: 'absolute', left: 0, right: 0, top: 0, height: 13, backgroundColor: `rgba(255,255,255,${TH.titleShine})` },
-  titleIcon: { width: 20, height: 20, marginRight: 6 },
-  titleText: { flex: 1, color: TH.titleText, fontFamily: TH.titleFont, fontSize: TH.titleFont === 'Cinzel' ? 14.5 : 15, letterSpacing: vana ? 0.4 : 0,
-    textShadowColor: TH.titleTextShadow, textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 1 },
-  caps: { flexDirection: 'row', gap: 3 },
-  cap: { width: vana ? 22 : 24, height: vana ? 19 : 22, borderRadius: vana ? 2 : 4, borderWidth: 1, borderColor: TH.capBorder, alignItems: 'center', justifyContent: 'center' },
-  capText: { color: '#FFF', fontFamily: F.bold, fontSize: 15, lineHeight: 18, marginTop: -2 },
-  // (2026-11-25) flexGrow, not flex: 1. On phones flex: 1 sizes a window that doesn't fill the screen from nothing, so
-  // the Stinkshell sign-in window showed only its title bar ("minimized"). Windows that fill the screen still do.
-  body: { flexGrow: 1, flexShrink: 1, backgroundColor: TH.winBg, margin: vana ? 0 : 3, marginTop: 0, padding: 8 },
-  pane: { backgroundColor: TH.paneBg, borderWidth: 1, borderColor: TH.paneEdge, borderRadius: vana ? 2 : 3 },
-  strip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: TH.line },
-  stripText: { flex: 1, fontFamily: TH.titleFont === 'Cinzel' ? 'Cinzel' : F.bold, fontSize: 13, color: TH.stripText },
+  title: { flexDirection: 'row', alignItems: 'center', minHeight: 36, paddingLeft: 12, paddingRight: 6, borderBottomWidth: 1, borderBottomColor: TH.rowLine },
+  titleText: { flex: 1, color: TH.stripText, fontFamily: TH.titleFont, fontSize: cinzel ? 14 : 15, letterSpacing: cinzel ? 0.6 : 0.2, paddingVertical: 8 },
+  titleClose: { width: 32, height: 32 },
+  // (2026-11-25) flexGrow, not flex: 1. On phones flex: 1 sizes a section that doesn't fill the screen from nothing, so
+  // the Stinkshell sign-in showed only its title ("minimized"). Sections that fill the screen still do.
+  body: { flexGrow: 1, flexShrink: 1, padding: 10 },
+  pane: { backgroundColor: TH.paneBg, borderRadius: vana ? 4 : 8, overflow: 'hidden' },
+  strip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingTop: 9, paddingBottom: 5 },
+  stripText: { flex: 1, fontFamily: F.bold, fontSize: 11.5, letterSpacing: 0.9, color: TH.dim, textTransform: 'uppercase' },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  iconDot: { position: 'absolute', top: 7, right: 7, width: 9, height: 9, borderRadius: 5, backgroundColor: '#E8302A', borderWidth: 1, borderColor: '#FFFFFF' },
+  seg: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 9, padding: 3, gap: 2 },
+  segItem: { flex: 1, minHeight: 32, borderRadius: 7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  segOn: { backgroundColor: TH.segOn },
+  segText: { fontFamily: F.semi, fontSize: 14, color: TH.titleText, opacity: 0.85 },
+  segTextOn: { color: TH.segOnText, opacity: 1, fontFamily: F.bold },
   btn: { borderRadius: TH.btnRadius, borderWidth: 1, borderColor: TH.btnBorder, paddingVertical: 7, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   btnSmall: { paddingVertical: 4, paddingHorizontal: 9 },
   btnPrimary: { borderColor: TH.primaryBorder, borderRadius: TH.primaryRadius, paddingHorizontal: 18 },

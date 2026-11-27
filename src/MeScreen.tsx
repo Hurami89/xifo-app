@@ -1,7 +1,8 @@
 // ME: your own characters, as the launcher synced them (pair the phone once with a code from the launcher).
+// (2026-11-26) Only what a character has is shown: the gear it wears, the jobs it has levelled, the crafts it has raised.
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Image, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { ART, Btn, C, F, Field, Pane, Pic, Strip, T, Win } from './ui';
+import { ART, Btn, C, F, Field, T, Win } from './ui';
 import { faceOf } from './faces';
 import { Card, cachedMe, claim, ERA_JOBS, JOBS, jobLine, me, MODES, NATIONS, Pending, RACES, siteUrl } from './armory';
 import { LINKS, setJSON } from './store';
@@ -21,7 +22,8 @@ export const ago = (t: number) => {
 };
 const hours = (s: number) => (s >= 86400 ? `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`);
 
-export function PairBox({ onPaired }: { onPaired: () => void }) {
+/** Pairing with the launcher. `title=""`: without its own title line (inside a screen that has one already). */
+export function PairBox({ onPaired, title = 'Pair with my launcher' }: { onPaired: () => void; title?: string }) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -34,9 +36,8 @@ export function PairBox({ onPaired }: { onPaired: () => void }) {
     else setNote(out.error || 'That did not work.');
   };
   return (
-    <Win title="Pair with my launcher" icon={ART.buddy.phone}>
-      <Pic source={ART.banners[4]} ratio={2.5} style={st.banner} />
-      <T style={st.h}>See your characters and fish on the go</T>
+    <Win title={title}>
+      <T style={st.h}>See your characters and play on the go</T>
       <T style={st.p}>1. In the launcher: Characters page, <T style={st.b}>PAIR APP</T>.</T>
       <T style={st.p}>2. Type the 6-character code here (it works for 10 minutes).</T>
       <T style={st.p}>3. Press <T style={st.b}>SYNC NOW</T> in the launcher, so your characters are on xiforever.com.</T>
@@ -90,7 +91,7 @@ export default function MeScreen({ onCards }: { onCards?: (cards: Card[]) => voi
         </ScrollView>
       )}
       {cards && !cards.length && (
-        <Win title="No characters yet" icon={ART.buddy.game}>
+        <Win title="No characters yet">
           <T style={st.p}>This phone is paired. Now press <T style={st.b}>SYNC NOW</T> on the launcher's Characters page, then pull down here.</T>
         </Win>
       )}
@@ -121,10 +122,13 @@ export function Profile({ c, pending }: { c: Card; pending: Pending[] }) {
   useEffect(() => { siteUrl().then(setBase).catch(() => {}); }, []);
   const [race, sex] = RACES[c.race] || ['Hume', 'Male'];
   const equip = new Map(c.equip.map((e) => [e.slot, e]));
+  const worn = SLOT_ORDER.filter((s) => equip.get(s));
+  const jobs = ERA_JOBS.filter((j) => c.jobs[j]);
+  const crafts = CRAFTS.map((k) => ({ k, skill: (k === 'Fishing' ? c.fishing : c.crafts[k])?.skill || 0 })).filter((x) => x.skill > 0);
   const open = async () => Linking.openURL((await siteUrl()) + c._link).catch(() => {});
   return (
     <>
-      <Win title={`${c.name} - Character Profile`} icon={ART.buddy.game} style={{ marginBottom: 12 }}>
+      <Win title="" style={{ marginBottom: 12 }}>
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <View style={st.portrait}>
             <Image source={faceOf(c.race, c.face)} style={st.face} />
@@ -148,58 +152,59 @@ export function Profile({ c, pending }: { c: Card; pending: Pending[] }) {
           <T style={st.info}>Tetra Master: {pending.reduce((n, p) => n + (p.tetra?.gil || 0), 0).toLocaleString('en-US')} gil
             {pending.some((p) => p.tetra?.upgrades.length) ? ' and class-ups' : ''} from this phone arrive at your next PLAY.</T>
         ) : null}
-        <Pane style={{ marginTop: 10 }}>
-          <Strip title="Equipment" />
+        <T style={st.facts}>
+          Quests {c.quests} · Titles {c.titles} · Key items {c.keyitems}{c.hp ? ` · HP ${c.hp} · MP ${c.mp}` : ''}{c.world ? ` · ${c.world}` : ''}
+        </T>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' }}>
+          <Btn small primary label="Open my page" onPress={open} />
+          <T style={st.vis}>{c._vis === 'public' ? 'Everyone can see it' : c._vis === 'link' ? 'Only people with the link' : 'Hidden'} · synced {ago(c._synced)}</T>
+        </View>
+      </Win>
+      <Win title="Equipment" style={{ marginBottom: 12 }} bodyStyle={{ padding: 6 }}>
+        {worn.length ? (
           <View style={st.equip}>
-            {SLOT_ORDER.map((s, i) => {
-              const e = equip.get(s);
+            {worn.map((s) => {
+              const e = equip.get(s)!;
               return (
-                <View key={i} style={st.slot}>
+                <View key={s} style={st.slot}>
                   <View style={st.slotIn}>
-                    <ItemIcon id={e?.id} base={base} />
+                    <ItemIcon id={e.id} base={base} />
                     <View style={{ flex: 1 }}>
                       <T style={st.slotName}>{SLOT_NAME[s]}</T>
-                      <T style={[st.slotItem, !e && { color: C.dim, opacity: 0.6 }]} numberOfLines={2}>{e ? e.name : '-'}</T>
+                      <T style={st.slotItem} numberOfLines={2}>{e.name}</T>
                     </View>
                   </View>
                 </View>
               );
             })}
           </View>
-        </Pane>
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-          <Btn small primary label="Open my page on xiforever.com" onPress={open} />
-          <T style={st.vis}>{c._vis === 'public' ? 'Everyone can see it' : c._vis === 'link' ? 'Only people with the link' : 'Hidden'} · synced {ago(c._synced)}</T>
-        </View>
+        ) : <T style={st.none}>Nothing equipped at the last sync.</T>}
       </Win>
-      <Win title="Jobs" icon={ART.buddy.game} style={{ marginBottom: 12 }}>
-        <View style={st.jobs}>
-          {ERA_JOBS.map((j) => {
-            const lv = c.jobs[j] || 0;
-            return (
-              <View key={j} style={[st.jobBox, lv >= 75 && st.jobMax, !lv && { opacity: 0.35 }]}>
+      {jobs.length ? (
+        <Win title="Jobs" style={{ marginBottom: 12 }}>
+          <View style={st.jobs}>
+            {jobs.map((j) => (
+              <View key={j} style={[st.jobBox, c.jobs[j] >= 75 && st.jobMax]}>
                 <T style={st.jobName}>{j}</T>
-                <T style={st.jobLv}>{lv || '-'}</T>
+                <T style={st.jobLv}>{c.jobs[j]}</T>
               </View>
-            );
-          })}
-        </View>
-      </Win>
-      <Win title="Crafts & Fishing" icon={ART.buddy.web} style={{ marginBottom: 12 }}>
-        {CRAFTS.map((k) => {
-          const v = k === 'Fishing' ? c.fishing : c.crafts[k];
-          const skill = v ? v.skill : 0;
-          return (
+            ))}
+          </View>
+        </Win>
+      ) : null}
+      {crafts.length ? (
+        <Win title="Crafts & Fishing" style={{ marginBottom: 12 }}>
+          {crafts.map(({ k, skill }) => (
             <View key={k} style={st.craft}>
               <T style={st.craftName}>{k}</T>
               <T style={st.craftVal}>{skill.toFixed(1)}</T>
               <View style={st.bar}><View style={[st.barFill, { width: `${Math.min(100, skill)}%` }]} /></View>
             </View>
-          );
-        })}
-      </Win>
+          ))}
+        </Win>
+      ) : null}
       {c.squad.length ? (
-        <Win title={`${c.name}'s Squad`} icon={ART.buddy.game} style={{ marginBottom: 12 }}>
+        <Win title={`${c.name}'s Squad`} style={{ marginBottom: 12 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {c.squad.map((m) => (
               <View key={m.name} style={st.mate}>
@@ -212,18 +217,12 @@ export function Profile({ c, pending }: { c: Card; pending: Pending[] }) {
           </ScrollView>
         </Win>
       ) : null}
-      <Win title="Adventure" icon={ART.buddy.phone} style={{ marginBottom: 12 }}>
-        <T style={st.p}>Quests done: <T style={st.b}>{c.quests}</T> · Titles: <T style={st.b}>{c.titles}</T> · Key items: <T style={st.b}>{c.keyitems}</T></T>
-        {c.hp ? <T style={st.p}>HP {c.hp} · MP {c.mp}</T> : null}
-        {c.world ? <T style={st.p}>World: {c.world}</T> : null}
-      </Win>
     </>
   );
 }
 
 const st = StyleSheet.create({
   wrap: { padding: 10, paddingBottom: 24 },
-  banner: { borderRadius: 4, borderWidth: 1, borderColor: C.paneEdge, marginBottom: 10 },
   h: { fontFamily: F.bold, fontSize: 18, color: C.accent, marginBottom: 6 },
   p: { fontSize: 14.5, lineHeight: 21, marginBottom: 3 },
   b: { fontFamily: F.bold },
@@ -234,7 +233,7 @@ const st = StyleSheet.create({
   chipOn: { backgroundColor: C.chipOn, borderColor: C.chipOnEdge },
   chipFace: { width: 30, height: 28, borderRadius: 14 },
   chipName: { fontFamily: F.semi, fontSize: 14, color: C.chipText },
-  portrait: { width: 118, padding: 4, backgroundColor: C.boxBg, borderWidth: 1, borderColor: C.paneEdge, borderRadius: 6 },
+  portrait: { width: 116, padding: 4, backgroundColor: C.boxBg, borderRadius: 8 },
   face: { width: 108, height: 100, borderRadius: 3 },
   mode: { position: 'absolute', right: 4, top: 4, width: 32, height: 32 },
   name: { fontFamily: F.bold, fontSize: 26, color: C.accent },
@@ -244,9 +243,11 @@ const st = StyleSheet.create({
   tag: { fontSize: 12, backgroundColor: C.boxBg, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
   tagHc: { backgroundColor: C.hcBg, borderColor: C.hcEdge, color: C.hardcore, fontFamily: F.bold },
   tagGil: { backgroundColor: C.gilBg, borderColor: C.gilEdge, color: C.gilText, fontFamily: F.semi },
-  equip: { flexDirection: 'row', flexWrap: 'wrap', padding: 4 },
+  equip: { flexDirection: 'row', flexWrap: 'wrap' },
   slot: { width: '50%', padding: 3 },
-  slotIn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.boxBg, borderWidth: 1, borderColor: C.line, borderRadius: 4, padding: 4 },
+  slotIn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.boxBg, borderRadius: 6, padding: 5 },
+  none: { color: C.dim, fontSize: 14, padding: 4 },
+  facts: { color: C.dim, fontSize: 13, lineHeight: 19, marginTop: 10 },
   icon: { borderRadius: 3 },
   iconEmpty: { backgroundColor: C.line, opacity: 0.35 },
   mateIcons: { flexDirection: 'row', flexWrap: 'wrap', gap: 2, justifyContent: 'center', marginTop: 4 },
@@ -254,7 +255,7 @@ const st = StyleSheet.create({
   slotItem: { fontSize: 11.5, lineHeight: 14, minHeight: 28 },
   vis: { fontSize: 12, color: C.dim, alignSelf: 'center', flex: 1 },
   jobs: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  jobBox: { width: '15%', minWidth: 48, alignItems: 'center', backgroundColor: C.boxBg, borderWidth: 1, borderColor: C.line, borderRadius: 4, paddingVertical: 3 },
+  jobBox: { width: '15%', minWidth: 48, alignItems: 'center', backgroundColor: C.boxBg, borderWidth: 1, borderColor: 'transparent', borderRadius: 6, paddingVertical: 4 },
   jobMax: { backgroundColor: C.maxBg, borderColor: C.maxEdge },
   jobName: { fontSize: 11, color: C.dim },
   jobLv: { fontFamily: F.bold, fontSize: 15 },
@@ -263,7 +264,7 @@ const st = StyleSheet.create({
   craftVal: { width: 40, fontFamily: F.semi, fontSize: 13.5 },
   bar: { flex: 1, height: 9, backgroundColor: C.barBg, borderRadius: 5, borderWidth: 1, borderColor: C.line, overflow: 'hidden' },
   barFill: { height: '100%', backgroundColor: C.barFill },
-  mate: { width: 112, backgroundColor: C.boxBg, borderWidth: 1, borderColor: C.line, borderRadius: 6, padding: 5, alignItems: 'center' },
+  mate: { width: 112, backgroundColor: C.boxBg, borderRadius: 8, padding: 5, alignItems: 'center' },
   mateFace: { width: 100, height: 93, borderRadius: 4 },
   mateName: { fontFamily: F.bold, fontSize: 13.5, marginTop: 3 },
   mateJob: { fontSize: 12.5, color: C.dim },

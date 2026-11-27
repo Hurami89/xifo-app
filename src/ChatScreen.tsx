@@ -1,9 +1,10 @@
-// The Stinkshell chat room, as a 2004 messenger window: sign-in card, "Name says:" lines, buddy list, emoticons.
+// The Stinkshell chat room: sign in with a screen name, then the room ("Name says:" lines, who is in it, emoticons).
+// (2026-11-26) The room's switches (sign out, sounds, filter, blocked) sit behind "More"; the rules fold away.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { createAudioPlayer, AudioPlayer } from 'expo-audio';
-import { ART, Btn, C, F, Field, Pane, Pic, Strip, T, Win } from './ui';
+import { ART, Btn, C, F, Field, Pane, T, Win } from './ui';
 import { TH } from './theme';
 import { Line, Room } from './stink';
 import { getJSON, setJSON } from './store';
@@ -58,6 +59,8 @@ export default function ChatScreen({ onCount }: { onCount?: (n: number | null) =
   const [lines, setLines] = useState<Line[]>([]);
   const [people, setPeople] = useState<string[]>([]);
   const [showPeople, setShowPeople] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const [text, setText] = useState('');
   const [blocked, setBlocked] = useState<string[]>([]);
   const [clean, setClean] = useState(true);
@@ -80,7 +83,7 @@ export default function ChatScreen({ onCount }: { onCount?: (n: number | null) =
     return () => room.current?.stop();
   }, []);
 
-  useEffect(() => { if (signedOn) onCount?.(people.length); }, [people, signedOn, onCount]);
+  useEffect(() => { onCount?.(signedOn ? people.length : null); }, [people, signedOn, onCount]);
 
   const signOn = async () => {
     const n = name.trim();
@@ -156,15 +159,9 @@ export default function ChatScreen({ onCount }: { onCount?: (n: number | null) =
   if (!signedOn) {
     return (
       <View style={st.wrap}>
-        <Win title="Stinkshell Messenger" icon={ART.buddy.game} style={{ alignSelf: 'stretch' }}>
-          <Pic source={ART.banners[1]} ratio={2.5} style={st.banner} />
-          <View style={st.signBox}>
-            <View style={st.picFrame}><Image source={ART.buddy.phone} style={{ width: 64, height: 64 }} /></View>
-            <View style={{ flex: 1 }}>
-              <T style={st.signTitle}>Sign in to the room</T>
-              <T style={st.hint}>One room for everyone: players in game, on xiforever.com and on phones.</T>
-            </View>
-          </View>
+        <Win title="" style={{ alignSelf: 'stretch' }}>
+          <T style={st.signTitle}>Sign in to the room</T>
+          <T style={[st.hint, { marginBottom: 12 }]}>One room for everyone: players in game, on xiforever.com and on phones.</T>
           <T style={st.label}>Screen name</T>
           <Field value={name} onChangeText={setName} placeholder="YourName" maxLength={15} autoCapitalize="none"
             onSubmitEditing={signOn} returnKeyType="go" />
@@ -173,11 +170,15 @@ export default function ChatScreen({ onCount }: { onCount?: (n: number | null) =
           <View style={{ alignItems: 'center', marginTop: 12 }}>
             <Btn primary label={busy ? 'Signing in...' : 'Sign In'} onPress={signOn} disabled={busy} style={{ minWidth: 160 }} />
           </View>
-        </Win>
-        <Win title="Room Rules" style={{ alignSelf: 'stretch', marginTop: 12 }}>
-          <T style={st.rules}>
-            {'• Be nice. No hate, no harassment, nothing gross.\n• Moderators can mute, kick and ban.\n• Long-press a name to block someone (only you stop seeing them).\n• Trouble with someone? Tell a moderator on the Discord.'}
-          </T>
+          <Pressable onPress={() => setShowRules((v) => !v)} accessibilityRole="button" accessibilityLabel="Room rules" hitSlop={8}
+            style={{ alignSelf: 'center', marginTop: 14 }}>
+            <T style={st.rulesLink}>Room rules {showRules ? '▴' : '▾'}</T>
+          </Pressable>
+          {showRules ? (
+            <T style={st.rules}>
+              {'• Be nice. No hate, no harassment, nothing gross.\n• Moderators can mute, kick and ban.\n• Long-press a name to block someone (only you stop seeing them).\n• Trouble with someone? Tell a moderator on the Discord.'}
+            </T>
+          ) : null}
         </Win>
       </View>
     );
@@ -188,7 +189,7 @@ export default function ChatScreen({ onCount }: { onCount?: (n: number | null) =
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
       <View style={st.wrap}>
-        <Win title={TH.chatMode === 'ffxi' ? 'Stinkshell - Linkshell' : TH.chatMode === 'online' ? 'Stinkshell Chat Room: Vana\'diel Lobby' : 'Main Room - Stinkshell'} icon={ART.buddy.game} style={{ flex: 1, alignSelf: 'stretch' }} onClose={signOff}>
+        <Win title="" style={{ flex: 1, alignSelf: 'stretch' }}>
           <View style={st.meRow}>
             <Image source={buddyOf(screen)} style={{ width: 30, height: 30 }} />
             <View style={{ flex: 1 }}>
@@ -199,52 +200,50 @@ export default function ChatScreen({ onCount }: { onCount?: (n: number | null) =
               </View>
             </View>
             <Btn small label={`People (${people.length})`} active={showPeople} onPress={() => setShowPeople((v) => !v)} />
+            <Btn small label="More" active={showMore} onPress={() => setShowMore((v) => !v)} />
           </View>
+          {showMore ? (
+            <View style={st.moreRow}>
+              <Btn small label="Sign Out" onPress={signOff} />
+              <Btn small label={sound ? 'Sounds: On' : 'Sounds: Off'} onPress={() => { setSound(!sound); setJSON('stink.sound', !sound); }} />
+              <Btn small label={clean ? 'Filter: On' : 'Filter: Off'} onPress={() => { setClean(!clean); setJSON('stink.clean', !clean); }} />
+              {blocked.length > 0 && <Btn small label={`Blocked (${blocked.length})`} onPress={() => {
+                if (Platform.OS === 'web') return saveBlocked([]);
+                Alert.alert('Blocked', blocked.join(', '), [{ text: 'Close' }, { text: 'Unblock all', onPress: () => saveBlocked([]) }]);
+              }} />}
+            </View>
+          ) : null}
           {note ? <T style={st.err} numberOfLines={2}>{note}</T> : null}
-          <View style={{ flex: 1, flexDirection: 'row', gap: 6 }}>
-            <Pane style={{ flex: 1 }}>
-              <FlatList
-                ref={list}
-                data={shown}
-                keyExtractor={(l) => String(l.seq)}
-                renderItem={({ item, index }) => (
-                  <ChatLine line={item} prev={shown[index - 1]} me={screen} clean={clean} onName={askBlock} />
-                )}
-                contentContainerStyle={{ padding: 8 }}
-                onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
-                ListEmptyComponent={<T style={st.sys}>You have entered the room. Say hi!</T>}
-              />
+          {showPeople ? (
+            // who is here, as a few rows above the talk (beside it, the talk had half the phone's width)
+            <Pane style={st.people}>
+              <ScrollView contentContainerStyle={st.peopleIn}>
+                {people.map((item) => (
+                  <Pressable key={item} onLongPress={() => askBlock(item)} onPress={() => setText((t) => t + item.replace(/^(website|mobile): /, '') + ' ')} style={st.person}>
+                    <Image source={buddyOf(item)} style={{ width: 16, height: 16 }} />
+                    <T style={[st.personName, item === screen && { color: C.me }]} numberOfLines={1}>{item}</T>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </Pane>
-            {showPeople && (
-              <Pane style={{ width: 150 }}>
-                <Strip title={`Online (${people.length})`} />
-                <FlatList
-                  data={people}
-                  keyExtractor={(p) => p}
-                  contentContainerStyle={{ padding: 4 }}
-                  renderItem={({ item }) => (
-                    <Pressable onLongPress={() => askBlock(item)} onPress={() => setText((t) => t + item.replace(/^(website|mobile): /, '') + ' ')} style={st.person}>
-                      <Image source={buddyOf(item)} style={{ width: 18, height: 18 }} />
-                      <T style={[st.personName, item === screen && { color: C.me }]} numberOfLines={1}>{item}</T>
-                    </Pressable>
-                  )}
-                />
-              </Pane>
-            )}
-          </View>
+          ) : null}
+          <Pane style={{ flex: 1 }}>
+            <FlatList
+              ref={list}
+              data={shown}
+              keyExtractor={(l) => String(l.seq)}
+              renderItem={({ item, index }) => (
+                <ChatLine line={item} prev={shown[index - 1]} me={screen} clean={clean} onName={askBlock} />
+              )}
+              contentContainerStyle={{ padding: 8 }}
+              onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
+              ListEmptyComponent={<T style={st.sys}>You have entered the room. Say hi!</T>}
+            />
+          </Pane>
           <View style={st.inputRow}>
             <Field boxStyle={{ flex: 1 }} value={text} onChangeText={setText} placeholder="Type a message... :)"
               maxLength={200} onSubmitEditing={send} returnKeyType="send" submitBehavior="submit" />
             <Btn primary label="Send" onPress={send} />
-          </View>
-          <View style={st.bottomRow}>
-            <Btn small label="Sign Out" onPress={signOff} />
-            <Btn small label={sound ? 'Sounds: On' : 'Sounds: Off'} onPress={() => { setSound(!sound); setJSON('stink.sound', !sound); }} />
-            <Btn small label={clean ? 'Filter: On' : 'Filter: Off'} onPress={() => { setClean(!clean); setJSON('stink.clean', !clean); }} />
-            {blocked.length > 0 && <Btn small label={`Blocked (${blocked.length})`} onPress={() => {
-              if (Platform.OS === 'web') return saveBlocked([]);
-              Alert.alert('Blocked', blocked.join(', '), [{ text: 'Close' }, { text: 'Unblock all', onPress: () => saveBlocked([]) }]);
-            }} />}
           </View>
         </Win>
       </View>
@@ -309,14 +308,13 @@ const ChatLine = React.memo(function ChatLine({ line, prev, me, clean, onName }:
 
 const st = StyleSheet.create({
   wrap: { flex: 1, padding: 10, alignItems: 'center' },
-  banner: { borderRadius: 4, borderWidth: 1, borderColor: C.paneEdge },
-  signBox: { flexDirection: 'row', gap: 10, alignItems: 'center', marginVertical: 12 },
-  picFrame: { padding: 4, backgroundColor: C.boxBg, borderWidth: 1, borderColor: C.paneEdge, borderRadius: 6 },
   signTitle: { fontFamily: F.bold, fontSize: 18, color: C.accent },
   label: { fontFamily: F.semi, fontSize: 14, marginBottom: 4 },
   hint: { fontSize: 13, color: C.dim, marginTop: 4 },
   err: { color: C.err, fontSize: 13, marginVertical: 4 },
-  rules: { fontSize: 14, lineHeight: 21 },
+  rules: { fontSize: 13.5, lineHeight: 20, color: C.dim, marginTop: 6 },
+  rulesLink: { fontSize: 13.5, color: C.link, fontFamily: F.semi },
+  moreRow: { flexDirection: 'row', gap: 5, marginBottom: 6, flexWrap: 'wrap' },
   meRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   meName: { fontFamily: F.bold, fontSize: 15 },
   meStatus: { fontSize: 12, color: C.dim },
@@ -335,8 +333,9 @@ const st = StyleSheet.create({
   lsName: { color: C.chatSay, fontFamily: F.semi },
   lsText: { color: C.chatSay, fontFamily: F.reg, fontSize: 15, lineHeight: 21 },
   hc: { flex: 1, color: C.hardcore, fontFamily: F.semi, fontSize: 14 },
-  person: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
-  personName: { fontSize: 13.5, flex: 1 },
+  people: { maxHeight: 116, marginBottom: 6 },
+  peopleIn: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, padding: 8 },
+  person: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12, backgroundColor: C.boxBg },
+  personName: { fontSize: 13.5 },
   inputRow: { flexDirection: 'row', gap: 6, marginTop: 6, alignItems: 'center' },
-  bottomRow: { flexDirection: 'row', gap: 5, marginTop: 6, flexWrap: 'wrap' },
 });

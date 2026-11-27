@@ -1,4 +1,4 @@
-// CARDS: Tetra Master with your character's own cards (2026-11-25, the user: "add tetra master into the app ... connect to
+// CARDS (Play tab): Tetra Master with your character's own cards (2026-11-25, the user: "add tetra master into the app ... connect to
 // your cards in game since you have to unlock them in game ... the same game modes and add pvp").
 //
 // The cards are the ones the character has in the game (the launcher syncs them with the character: collection, hidden
@@ -178,7 +178,7 @@ export default function TetraScreen({ active = true, goMe }: { active?: boolean;
         <Header />
         <Panel title="Pair with your launcher">
           <Txt style={{ marginBottom: 8 }}>Tetra Master here plays with your character's own cards from the game. Pair this app with your launcher first (it's quick):</Txt>
-          <PairBox onPaired={load} />
+          <PairBox onPaired={load} title="" />
         </Panel>
       </Shell>
     );
@@ -231,7 +231,7 @@ export default function TetraScreen({ active = true, goMe }: { active?: boolean;
       {!chars.length ? (
         <Panel title="No characters yet">
           <Txt>Press PLAY in the launcher once so your characters (and their cards) come over.</Txt>
-          {goMe ? <Btn label="Open ME" onPress={goMe} style={{ marginTop: 10 }} /> : null}
+          {goMe ? <Btn label="Open Me" onPress={goMe} style={{ marginTop: 10 }} /> : null}
         </Panel>
       ) : (
         <>

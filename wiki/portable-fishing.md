@@ -3,8 +3,8 @@
 Fish on your phone with one of your real characters. Everything you catch comes home to them.
 
 ## Get started
-1. Pair this app with your launcher (ME tab) and press **SYNC NOW** in the launcher.
-2. Open **FISH**, pick your character, then a region, a place and a spot. These are the game's real fishing spots, with the fish that really live there.
+1. Pair this app with your launcher (Me tab) and press **SYNC NOW** in the launcher.
+2. Open **Play**, then **Fishing**, and pick your character, then a region, a place and a spot. These are the game's real fishing spots, with the fish that really live there.
 3. Pick a rod and bait, and **Cast**.
 
 ## The fight
