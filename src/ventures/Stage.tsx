@@ -195,7 +195,14 @@ export function membersOf(mates: VMate[], party: PartyMember[]): Member[] {
   party.forEach((p, i) => {
     let h = 0;
     for (const ch of p.name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    out.push({ kind: 'party', idx: (h + i) % Math.max(1, PARTY.length), job: p.job });
+    // (2026-11-27, Hurami: the party members a venture recruits were Kaza's small party sprites, smaller than the squad)
+    // drawn with the same generated job sprites as your mates, in their own race (from the hub; else one by name)
+    if (GEN_SHEET[p.job]) {
+      const race = p.race >= 1 && p.race <= 8 ? p.race : 1 + (h % 8);
+      out.push({ kind: 'mate', race, job: p.job, face: h % 16, weapon: 0 });
+    } else {
+      out.push({ kind: 'party', idx: (h + i) % Math.max(1, PARTY.length), job: p.job });
+    }
   });
   return out.slice(0, 6);
 }
