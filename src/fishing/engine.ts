@@ -43,8 +43,11 @@ export function rollHook(spot: Spot, bait: Bait, skill: number, rod: Rod): { fis
     let hook = { 1: bait.lure ? 30 : 35, 2: bait.lure ? 60 : 65, 3: bait.lure ? 75 : 80 }[Math.min(3, power) as 1 | 2 | 3];
     if (f.skill > skill) hook -= Math.min(hook, Math.floor((f.skill - skill) * 0.25));
     if (skill - 10 > f.skill) hook -= Math.min(hook, Math.floor((skill - 10 - f.skill) * 0.15));
-    if (!rod.large && f.large) hook -= Math.min(hook, 3);
-    candidates.push({ fish: f, weight: Math.max(1, hook) * (rarity / 1000) });
+    // the server's rod penalty: a fish smaller than the rod -3, bigger than the rod -5; then rarity, kept within 20..120
+    if (rod.large && !f.large) hook -= Math.min(hook, 3);
+    else if (!rod.large && f.large) hook -= Math.min(hook, 5);
+    if (rarity < 1000) hook = Math.floor(hook * (rarity / 1000));
+    candidates.push({ fish: f, weight: Math.max(20, Math.min(120, hook)) });
   }
   if (!candidates.length) return { fish: null, critical: false };
   const total = candidates.reduce((s, c) => s + c.weight, 0);
@@ -77,22 +80,38 @@ export function loseChance(f: Fish, skill: number, rod: Rod): [number, string] {
   return [0, ''];
 }
 
-/** The fight, from the fish's numbers (difficulty, delay, movement) and the rod's (attack, time). Stamina is 0..100. */
+/** The fish's auto-regen, as the server's CalculateRegen works it out for a plain rod: 128 is neutral, above it the fish
+ * gets stamina back by itself (far above your skill), below it the fish tires by itself (far below your skill). */
+export function regenOf(f: Fish, rod: Rod, skill: number): number {
+  let regen = 128;
+  if (f.large) regen += 1;                                            // large fish and items
+  if (!f.item && f.skill <= skill - 12) regen -= Math.min(regen, 1 + Math.floor((skill - 12 - f.skill) / 1.5));
+  if (!f.item && f.skill >= skill + 24) regen += 1 + Math.floor((f.skill - (skill + 24)) * 0.5);
+  return Math.max(0, Math.min(182, regen));
+}
+
+/** The fight, with the server's own numbers (fishingutils: CalculateStamina, CalculateAttack, CalculateHeal,
+ * CalculateRegen) turned into 0..100 stamina: each right arrow takes the rod's attack, a wrong or missed one gives the
+ * fish its heal back, and the auto-regen moves the fish's stamina every second by itself (2026-11-27, Hurami: skill-1
+ * anglers were landing skill-37 Shining Trout in East Ronfaure; in the game such a fish keeps getting its stamina back). */
 export function fightParams(f: Fish, rod: Rod, skill: number, critical: boolean) {
-  const sizePenalty = f.large && !rod.large ? 1.35 : 1;
-  const gap = f.skill - skill;
-  const skillFactor = gap > 0 ? Math.max(0.6, 1 - gap * 0.012) : Math.min(1.25, 1 + -gap * 0.006);
-  const needed = 6 + f.diff * 0.3;                                    // right taps an average rod needs
-  const hit = (100 / needed) * (rod.attack / 130) * skillFactor / sizePenalty * (critical ? 1.5 : 1);
+  const stamina = Math.floor((f.skill + 36) / 2) * 100;                // CalculateStamina (one fish, middle of the +-5%)
+  const attack = Math.floor(f.diff * (rod.attack / 100) * 20);        // CalculateAttack
+  const heal = Math.floor((attack / 20) * (rod.recovery / 100)) * 10 * (critical ? 0.7 : 1);   // CalculateHeal
+  const drift = ((regenOf(f, rod, skill) - 128) * REGEN_PER_SECOND / stamina) * 100;   // % of its stamina per second
   return {
     seconds: rod.time,
-    hit,                                                  // stamina taken by a right tap
-    heal: hit * 0.5,                                      // stamina the fish gets back on a wrong or missed tap
-    every: 0.6 + f.delay * 0.08,                          // seconds between arrows
-    window: Math.max(0.55, 1.35 - f.move * 0.05),         // seconds to answer an arrow
-    pull: f.large ? 0.5 : 0.25,                           // stamina per second the fish gets back on its own
+    hit: (attack / stamina) * 100 * (critical ? 1.3 : 1),            // stamina taken by a right arrow (more gold arrows)
+    heal: (heal / stamina) * 100,                                     // stamina the fish gets back on a wrong or missed one
+    every: 0.6 + f.delay * 0.08,                                      // seconds between arrows
+    window: Math.max(0.55, 1.35 - f.move * 0.05),                     // seconds to answer an arrow
+    pull: drift,                                                      // stamina per second the fish gets back (< 0: tires)
   };
 }
+// One step of auto-regen (away from 128) in stamina points per second. The client's own unit is not published: one point
+// a frame at the game's 30 frames a second. A skill-37 Shining Trout against skill 1 (7 steps) then gets back ~6% of its
+// stamina a second ("recovers rapidly", as SE describes a fish far above your skill); a Crayfish 13+ below you tires.
+export const REGEN_PER_SECOND = 30;
 
 /** Skill-up after a catch: the server's FishingSkillup, line for line (values in tenths, like the game keeps them). */
 export function skillUp(catchLevel: number, skillTenths: number, rank: number, inCity: boolean, rate = 1): number {
@@ -152,8 +171,9 @@ export function autoFight(f: Fish, rod: Rod, skill: number, critical: boolean): 
   let t = 0;
   while (t < p.seconds) {
     t += p.every;                                   // the next arrow
-    stamina = Math.min(100, stamina + p.pull * p.every);
     const react = rand(AUTO_REACT[0], AUTO_REACT[1]);
+    // the fish's auto-regen (or drain) runs the whole time: the wait for the arrow and the answer to it
+    stamina = Math.min(100, stamina + p.pull * (p.every + Math.min(react, p.window)));
     if (react <= p.window && Math.random() < AUTO_ACCURACY) {
       stamina -= p.hit;
     } else {
