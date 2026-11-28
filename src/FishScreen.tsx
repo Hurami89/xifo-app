@@ -28,6 +28,7 @@ type Save = {
   outbox: Report | null;                 // a report being sent (kept until xiforever.com has it)
   log: Record<string, { count: number; best: number }>;
   zone: number | null; spot: number | null; rod: number | null; baitPick: string | null;
+  seenGear?: string;                     // (2026-11-27) the rod and bait worn in game when the app last looked
   total: number;
   auto: { on: boolean; at: number } | null;          // the auto-fisher: on, and when it last fished (for the catch-up)
   daily: { day: string; count: number };            // catches today (the game's fishing fatigue)
@@ -65,6 +66,7 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
   const [landedFish, setLandedFish] = useState<{ id: number; name: string; size: number; item: boolean; large?: boolean } | null>(null);
   const saveRef = useRef(save);
   saveRef.current = save;
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);   // whose save is loaded (the game-gear check waits for it)
   const lineId = useRef(0);
   const autoRef = useRef(false);
   const timers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
@@ -98,6 +100,8 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
       setSave(s);
       setView(s.zone ? 'spot' : 'where');
       setJSON('fish.' + who, s);
+      saveRef.current = s;
+      setLoadedFor(who);
     })();
   }, [who]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -133,6 +137,18 @@ export default function FishScreen({ cardsHint, goMe, active = true }: { cardsHi
   }, [save, card]);
   const baitSel = baitList.find((b) => b.key === save.baitPick) || baitList.find((b) => b.own && b.bait.id === equipped(3))
     || baitList[0] || null;
+  // (2026-11-27, Hurami: the app kept showing an old rod and bait) the rod and bait the character wears in game win
+  // whenever they change there (a new card from the launcher): an earlier pick in the app is dropped then
+  const gearKey = card ? `${equipped(2) || 0}:${equipped(3) || 0}` : '';
+  useEffect(() => {
+    if (!who || !card || loadedFor !== who || gearKey === (saveRef.current.seenGear || '')) return;
+    update((s) => {
+      s.seenGear = gearKey;
+      const r = equipped(2), b = equipped(3);
+      if (r && rods.some((x) => x.id === r)) s.rod = r;
+      if (b && (card.fishing.bait || []).some((x) => x.id === b)) s.baitPick = 'o' + b;
+    });
+  }, [who, gearKey, loadedFor]); // eslint-disable-line react-hooks/exhaustive-deps
   const zone = E.ZONES.find((z) => z.id === save.zone) || null;
   const spot = zone?.spots.find((s) => s.id === save.spot) || zone?.spots[0] || null;
 
